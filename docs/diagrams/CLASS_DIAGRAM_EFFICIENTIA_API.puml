@@ -1,0 +1,290 @@
+@startuml
+allowmixing
+
+title Efficientia — Diagrama de classes da API Java
+
+left to right direction
+hide circle
+hide empty methods
+skinparam shadowing false
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam classAttributeIconSize 0
+skinparam defaultFontName Arial
+skinparam class {
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  ArrowColor #475569
+}
+skinparam package {
+  BorderColor #64748B
+  FontColor #0F172A
+}
+skinparam note {
+  BackgroundColor #FFF7D6
+  BorderColor #D6A700
+}
+
+package "Consumidores e serviços externos" #F1F5F9 {
+  class AplicativoMovel <<external>>
+  class WebReact <<external>>
+  class EfficientiaAiApi <<external API>> {
+    +listarNovosDocumentos(cursor, size)
+    +baixarDocumento(documentoId)
+  }
+}
+
+package "Efficientia API — Java/Spring Boot" #DBEAFE {
+  package "controller" {
+    class DocumentoController <<RestController>> {
+      +criarComArquivo(...): ResponseEntity
+      +criarAssinaturaTextual(...): ResponseEntity
+      +listar(...): PaginaDocumentosResponse
+      +buscar(documentoId): DocumentoResponse
+      +baixar(documentoId, inline): ResponseEntity
+    }
+  }
+
+  package "service" {
+    class DocumentoService <<service>> {
+      +criarComArquivo(...): DocumentoResponse
+      +criarAssinaturaTextual(...): DocumentoResponse
+      +listar(...): PaginaDocumentosResponse
+      +buscar(documentoId): DocumentoResponse
+      +abrir(documentoId): StoredDocument
+    }
+  }
+
+  package "validation" {
+    class ArquivoValidator <<validator>> {
+      +validar(arquivo, metadados): void
+      -detectarMimeReal(arquivo): String
+    }
+
+    class AssinaturaValidator <<validator>> {
+      +validarArquivo(metadados): void
+      +validarTexto(request): String
+      -normalizarNfc(texto): String
+    }
+  }
+
+  package "persistence" {
+    interface DocumentoRepository <<JpaRepository>> {
+      +save(entity): DocumentoEntity
+      +findById(id): Optional
+      +findByIdempotencyKey(key): Optional
+      +findAll(pageable): Page
+      +findNextCursor(cursor, size): List
+    }
+
+    class DocumentoEntity <<JPA entity>> {
+      +id: UUID
+      +viagemId: UUID
+      +tipoDocumento: TipoDocumento
+      +origem: OrigemDocumento
+      +assinanteId: UUID
+      +papelAssinante: PapelAssinante
+      +modalidadeAssinatura: ModalidadeAssinatura
+      +textoAssinatura: String [0..1]
+      +nomeOriginal: String [0..1]
+      +mimeType: String [0..1]
+      +tamanhoBytes: Long [0..1]
+      +sha256: String [0..1]
+      +storageKey: String [0..1]
+      +idempotencyKey: UUID
+      +criadoEm: Instant
+      +atualizadoEm: Instant
+      +versao: long
+      +temArquivo(): boolean
+      +ehAssinaturaTextual(): boolean
+    }
+
+    class DocumentoMapper <<mapper>> {
+      +paraEntidade(...): DocumentoEntity
+      +paraResponse(entity): DocumentoResponse
+    }
+  }
+
+  package "storage" {
+    interface StorageService <<interface>> {
+      +salvar(documentoId, arquivo, sha256): String
+      +abrir(storageKey): StoredDocument
+      +remover(storageKey): void
+    }
+
+    class LocalStorageService <<storage>>
+
+    class StoredDocument <<record>> {
+      +conteudo: Resource
+      +nomeOriginal: String
+      +mimeType: String
+      +tamanhoBytes: long
+    }
+
+    class ArquivoMetadata <<record>> {
+      +nomeOriginal: String
+      +mimeType: String
+      +tamanhoBytes: long
+      +sha256: String
+      +storageKey: String
+    }
+  }
+
+  package "dto" {
+    class DocumentoMetadataRequest <<record>> {
+      +viagemId: UUID
+      +tipoDocumento: TipoDocumento
+      +origem: OrigemDocumento
+      +assinanteId: UUID
+      +papelAssinante: PapelAssinante
+      +modalidadeAssinatura: ModalidadeAssinatura
+      +descricao: String
+    }
+
+    class AssinaturaTextoRequest <<record>> {
+      +viagemId: UUID
+      +assinanteId: UUID
+      +papelAssinante: PapelAssinante
+      +modalidadeAssinatura: TEXTO
+      +textoAssinatura: String
+      +descricao: String
+    }
+
+    class DocumentoResponse <<record>> {
+      +id: UUID
+      +tipoDocumento: TipoDocumento
+      +modalidadeAssinatura: ModalidadeAssinatura
+      +textoAssinatura: String [0..1]
+      +nomeOriginal: String [0..1]
+      +mimeType: String [0..1]
+      +sha256: String [0..1]
+      +conteudoUrl: String [0..1]
+      +versao: long
+    }
+
+    class PaginaDocumentosResponse <<record>> {
+      +itens: List<DocumentoResponse>
+      +page: Integer
+      +size: int
+      +proximoCursor: String
+      +temMais: boolean
+    }
+
+    class ApiProblemResponse <<record>>
+  }
+
+  package "domain" {
+    enum TipoDocumento {
+      RELATORIO_VIAGEM
+      BOLETIM_EMBARQUE
+      BOLETIM_DESEMBARQUE
+      ASSINATURA
+    }
+
+    enum OrigemDocumento {
+      UPLOAD
+      CAMERA
+      DESENHO
+      TEXTO
+      GERADO_SISTEMA
+    }
+
+    enum ModalidadeAssinatura {
+      FOTO
+      DESENHO
+      TEXTO
+    }
+
+    enum PapelAssinante {
+      MOTORISTA
+      MANOBRISTA
+      CURRALEIRO
+      FUNCIONARIO_FRIBOI
+    }
+  }
+
+  package "exception e config" {
+    class ApiExceptionHandler <<RestControllerAdvice>>
+    class ArquivoInvalidoException <<exception>>
+    class AssinaturaInvalidaException <<exception>>
+    class DocumentoNaoEncontradoException <<exception>>
+    class StorageException <<exception>>
+    class StorageProperties <<ConfigurationProperties>>
+  }
+
+  database PostgreSQL
+  folder "Storage privado\nLocal ou MinIO" as StoragePrivado
+}
+
+AplicativoMovel ..> DocumentoController : POST multipart ou JSON
+WebReact ..> DocumentoController : GET lista, metadados e conteúdo
+EfficientiaAiApi ..> DocumentoController : GET por cursor e conteúdo
+
+DocumentoController --> DocumentoService
+DocumentoController ..> DocumentoMetadataRequest
+DocumentoController ..> AssinaturaTextoRequest
+DocumentoController ..> PaginaDocumentosResponse
+
+DocumentoService --> ArquivoValidator
+DocumentoService --> AssinaturaValidator
+DocumentoService --> DocumentoRepository
+DocumentoService --> StorageService
+DocumentoService --> DocumentoMapper
+DocumentoService ..> StoredDocument
+
+DocumentoRepository --> DocumentoEntity
+DocumentoRepository ..> PostgreSQL : Spring Data JPA
+DocumentoMapper ..> DocumentoEntity
+DocumentoMapper ..> ArquivoMetadata
+DocumentoMapper ..> DocumentoResponse
+
+DocumentoEntity --> TipoDocumento
+DocumentoEntity --> OrigemDocumento
+DocumentoEntity --> ModalidadeAssinatura
+DocumentoEntity --> PapelAssinante
+DocumentoMetadataRequest --> TipoDocumento
+DocumentoMetadataRequest --> ModalidadeAssinatura
+AssinaturaTextoRequest --> PapelAssinante
+
+LocalStorageService ..|> StorageService
+LocalStorageService --> StorageProperties
+StorageService --> StoragePrivado
+StorageService ..> StoredDocument
+
+ApiExceptionHandler ..> ArquivoInvalidoException
+ApiExceptionHandler ..> AssinaturaInvalidaException
+ApiExceptionHandler ..> DocumentoNaoEncontradoException
+ApiExceptionHandler ..> StorageException
+ApiExceptionHandler ..> ApiProblemResponse
+
+note right of DocumentoController
+Mesma URL de criação:
+- multipart: PDF, FOTO ou DESENHO;
+- JSON: assinatura TEXTO.
+end note
+
+note bottom of DocumentoEntity
+TEXTO: textoAssinatura preenchido
+e campos de arquivo nulos.
+FOTO/DESENHO: storageKey preenchido
+e textoAssinatura nulo.
+end note
+
+note bottom of DocumentoService
+Acessa o repository JPA diretamente.
+Não existe DataApiClient nem
+uma terceira Data API.
+end note
+
+note bottom of StorageService
+PostgreSQL: metadados e texto curto.
+Storage: somente PDF e PNG.
+end note
+
+legend left
+  |= Cor | Escopo |
+  |<#DBEAFE> Azul | Classes da Efficientia API Java |
+  |<#F1F5F9> Cinza | Consumidores e AI API externos |
+endlegend
+
+@enduml
