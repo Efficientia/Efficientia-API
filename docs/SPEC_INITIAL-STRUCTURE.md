@@ -13,7 +13,7 @@ A arquitetura adotada possui **duas APIs**, e não três:
 
 1. **Efficientia API**, em Java e Spring Boot: documentos, regras de negócio,
    PostgreSQL e armazenamento dos arquivos;
-2. **Efficientia AI API**, preferencialmente em Python: conversa com o usuário,
+2. **Efficientia AI API**, em Python com FastAPI: conversa com o usuário,
    agente, RAG, MongoDB e processamento assíncrono relacionado à IA.
 
 A antiga separação entre `Efficientia Documents API` e `Efficientia Data API`
@@ -126,8 +126,8 @@ A distribuição dos bancos fica assim:
 | Tecnologia | Responsável | Uso |
 | --- | --- | --- |
 | PostgreSQL | Efficientia API | Metadados dos documentos, viagens, usuários e auditoria |
-| MongoDB | Efficientia AI API | Sessões, mensagens e memória conversacional |
-| Redis | Efficientia AI API | Fila de ingestão, jobs de RAG e estado temporário |
+| MongoDB | Efficientia AI API (FastAPI) | Sessões, mensagens e memória conversacional |
+| Redis | Efficientia AI API (FastAPI) | Fila de ingestão, jobs de RAG e estado temporário |
 | Storage local/MinIO | Efficientia API | Conteúdo binário de PDF e PNG |
 
 MongoDB não deve duplicar os metadados dos documentos apenas para cumprir um
@@ -162,7 +162,7 @@ não deve ser um proxy genérico do MongoDB.
 | Aplicativo móvel | Capturar assinatura ou documento e enviá-lo |
 | Efficientia API | Validar, armazenar, persistir metadados, listar e entregar documentos |
 | Sistema web React | Listar, visualizar e baixar documentos; conversar com a IA |
-| Efficientia AI API | Receber mensagens, acionar o agente e sincronizar documentos para RAG |
+| Efficientia AI API (Python/FastAPI) | Receber mensagens, acionar o agente e sincronizar documentos para RAG |
 | PostgreSQL | Persistir metadados relacionais |
 | Storage local/MinIO | Guardar PDF e PNG privados |
 | MongoDB | Guardar histórico e memória conversacional |
@@ -179,7 +179,7 @@ flowchart LR
     Web -->|GET lista e conteúdo| API
     API -->|Spring Data JPA| PG[(PostgreSQL)]
     API -->|arquivo binário| Storage[(Storage local ou MinIO)]
-    Web -->|POST mensagem| AI[Efficientia AI API]
+    Web -->|POST mensagem| AI[Efficientia AI API - FastAPI]
     AI -->|resposta do agente| Web
     AI -->|polling GET novos documentos| API
     AI --> Mongo[(MongoDB)]
@@ -892,7 +892,28 @@ Credenciais devem ser fornecidas por ambiente e nunca commitadas.
 
 ## 17. Efficientia AI API
 
-### 17.1 Fluxo de conversa
+### 17.1 Tecnologia e execução
+
+A Efficientia AI API será implementada em **Python com FastAPI**, executada
+sobre ASGI. Essa é uma decisão definitiva do projeto, não apenas uma
+preferência de implementação.
+
+A organização deve manter limites equivalentes aos da API Java:
+
+- modelos de entrada, saída e configuração validados com Pydantic;
+- rotas HTTP concentradas em `app.api.routes`;
+- orquestração do agente e regras de aplicação em `app.services`;
+- acesso ao MongoDB, Redis e à Efficientia API por adaptadores próprios;
+- funções `async` somente em fluxos que usam clientes de I/O não bloqueantes;
+- contrato OpenAPI publicado em `/openapi.json` e documentação local em
+  `/docs`;
+- exceções convertidas por handlers do FastAPI para
+  `application/problem+json`.
+
+FastAPI não altera os limites de domínio: a AI API continua sem acesso direto
+ao PostgreSQL, ao storage ou aos diretórios internos da Efficientia API.
+
+### 17.2 Fluxo de conversa
 
 ```text
 Pessoa
@@ -907,7 +928,7 @@ Pessoa
 
 A rota de mensagens não pertence à Efficientia API Java.
 
-### 17.2 Sincronização periódica de documentos
+### 17.3 Sincronização periódica de documentos
 
 ```text
 DocumentSyncScheduler
@@ -922,7 +943,7 @@ DocumentSyncScheduler
 A AI API não acessa PostgreSQL, storage ou diretórios internos da Efficientia
 API. Ela usa somente o contrato HTTP público.
 
-### 17.3 MongoDB
+### 17.4 MongoDB
 
 MongoDB guarda documentos como:
 
@@ -942,7 +963,7 @@ MongoDB guarda documentos como:
 }
 ```
 
-### 17.4 Redis
+### 17.5 Redis
 
 Redis pode guardar:
 
@@ -959,7 +980,10 @@ Redis.
 
 ## 18. Tratamento padronizado de erro
 
-Usar `@RestControllerAdvice` e retornar `application/problem+json`.
+Na Efficientia API Java, usar `@RestControllerAdvice`. Na Efficientia AI API,
+usar exception handlers do FastAPI. As duas APIs devem retornar
+`application/problem+json` e preservar o mesmo formato de erro quando o campo
+for aplicável.
 
 Exemplo:
 
@@ -1094,10 +1118,10 @@ Testes devem validar comportamento observável, não textos de placeholder.
 | `RF-DOC-09` | `DELETE /api/v1/documentos/{id}` |
 | `RF-DOC-10` | cursor da listagem e `DocumentSyncScheduler` da AI API |
 | `RF-DOC-11` | auditoria e logs estruturados |
-| `RF-IA-01` | `AiMessageController` |
-| `RF-IA-02` | `ConversationMongoRepository` |
-| `RF-IA-03` | `RedisIngestionQueue` |
-| `RF-IA-04` | `RagIndexer` e resposta do agente |
+| `RF-IA-01` | `POST /api/v1/mensagens`, `app.api.routes.messages` |
+| `RF-IA-02` | `app.repositories.conversations` |
+| `RF-IA-03` | `app.queues.ingestion` |
+| `RF-IA-04` | `app.services.rag_indexer` e resposta do agente |
 
 ---
 
@@ -1152,29 +1176,36 @@ Testes devem validar comportamento observável, não textos de placeholder.
 4. adicionar autenticação e autorização;
 5. publicar storage MinIO se necessário.
 
-### Incremento 3 — AI API
+### Incremento 3 — exportação ZIP da API principal
 
-1. criar endpoint de mensagens;
-2. persistir sessão e memória no MongoDB;
-3. criar scheduler de documentos;
-4. publicar jobs no Redis;
-5. extrair conteúdo e indexar RAG;
-6. citar as fontes usadas na resposta;
-7. adicionar observabilidade de latência, erros e custo.
+1. criar entidade e migration de `exportacao`;
+2. expor solicitação assíncrona e consulta de estado;
+3. validar autorização, limites e idempotência antes de enfileirar;
+4. gerar e guardar o ZIP por streaming em worker;
+5. expor download privado, expiração e limpeza;
+6. cobrir estados, falha, download e expiração com testes.
 
-### Incremento opcional — exportação ZIP
+O ZIP integra o escopo da EFFICIENTI-94. Retirá-lo da release exige alteração
+explícita do escopo e dos critérios de aceite no Jira.
 
-1. criar recurso `exportacao`;
-2. persistir o estado inicial;
-3. enfileirar o job;
-4. gerar e guardar o ZIP;
-5. expor status e download com expiração.
+### Incremento 4 — AI API em Python/FastAPI
+
+1. criar o projeto Python/FastAPI com configuração Pydantic, health check e
+   OpenAPI;
+2. definir schemas e criar `POST /api/v1/mensagens`;
+3. persistir sessão e memória no MongoDB;
+4. criar o cliente HTTP e o scheduler de documentos;
+5. publicar e consumir jobs no Redis;
+6. extrair conteúdo e indexar RAG;
+7. citar as fontes usadas na resposta;
+8. adicionar observabilidade de latência, erros e custo.
 
 ---
 
 ## 24. Decisão registrada
 
-**Decisão:** manter duas APIs: Efficientia API e Efficientia AI API.
+**Decisão:** manter duas APIs: Efficientia API em Java/Spring Boot e
+Efficientia AI API em Python/FastAPI.
 
 **Removido:** Efficientia Data API pass-through.
 
@@ -1186,11 +1217,14 @@ Testes devem validar comportamento observável, não textos de placeholder.
 - upload e consulta mais simples;
 - menos serviços para executar e depurar;
 - separação preservada onde existe diferença real de domínio e tecnologia.
+- contrato OpenAPI nativo e validação de schemas com Pydantic na AI API;
+- suporte direto a I/O assíncrono para agente, MongoDB, Redis e chamadas HTTP.
 
 **Consequências aceitas:**
 
 - a Efficientia API conhece PostgreSQL e storage;
 - a AI API conhece MongoDB e Redis;
 - cada API deve proteger suas próprias credenciais;
+- a AI API possui ciclo de build e implantação Python separado da API Java;
 - separar dados em outro serviço no futuro exigirá uma migração explícita, não
   uma abstração antecipada.
