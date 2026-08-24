@@ -9,16 +9,32 @@ O foco é receber PDF, PNG e assinaturas textuais enviados pelo aplicativo
 móvel, persistir seus dados e disponibilizá-los para o sistema web e para a API
 de IA.
 
-A arquitetura adotada possui **duas APIs**, e não três:
+## Atualização arquitetural — 18/08/2026
+
+Na fase atual, a **API REST Principal** é responsável pela conexão principal
+com o PostgreSQL/SQL, pelas regras de negócio e pela integração de dados com o
+aplicativo móvel e o sistema web React.
+
+O MongoDB e o Redis pertencem exclusivamente à **Efficientia AI API**. A API
+REST Principal não acessa MongoDB, não persiste memória conversacional e não
+processa filas da IA.
+
+A API de conexão com banco de dados permanece como uma etapa posterior da
+arquitetura. Ela não participa do fluxo atual da API REST e não deve ser
+introduzida como proxy genérico sem um contrato e uma responsabilidade próprios.
+
+A divisão funcional planejada é:
 
 1. **Efficientia API**, em Java e Spring Boot: documentos, regras de negócio,
    PostgreSQL e armazenamento dos arquivos;
 2. **Efficientia AI API**, em Python com FastAPI: conversa com o usuário,
-   agente, RAG, MongoDB e processamento assíncrono relacionado à IA.
+   agente, RAG, MongoDB e processamento assíncrono relacionado à IA;
+3. **API de conexão com banco**, planejada para uma etapa posterior, com
+   contrato interno próprio e sem responsabilidade sobre MongoDB da IA.
 
-A antiga separação entre `Efficientia Documents API` e `Efficientia Data API`
-foi removida. A Efficientia API acessará o PostgreSQL diretamente com Spring
-Data JPA.
+No escopo atual, a Efficientia API acessa o PostgreSQL diretamente com Spring
+Data JPA. A criação ou ativação da terceira API será documentada em uma nova
+decisão arquitetural antes de alterar esse fluxo.
 
 ---
 
@@ -34,9 +50,9 @@ Sistema web ──────┘                    │
 
 Sistema web ── HTTP ──> Efficientia AI API ──> agente e RAG
                               │
-                              ├── HTTP ──> Efficientia API
-                              ├──────────> MongoDB
-                              └──────────> Redis
+                              ├── HTTP ──> Efficientia API (documentos autorizados)
+                              ├──────────> MongoDB (exclusivo da AI API)
+                              └──────────> Redis (exclusivo da AI API)
 ```
 
 Essa divisão mantém dois limites claros:
@@ -44,29 +60,20 @@ Essa divisão mantém dois limites claros:
 - a Efficientia API é dona dos documentos e dos respectivos metadados;
 - a AI API é dona das conversas, da memória do agente e do índice de RAG.
 
-### 2.2 Por que a Data API separada foi removida
+### 2.2 API de conexão com banco como etapa posterior
 
-Uma API cuja única função seja repassar CRUD para outra API e então acessar o
-banco adicionaria:
+No incremento atual, a API REST Principal mantém a conexão principal com o
+PostgreSQL usando Spring Data JPA. Essa decisão permite implementar e validar o
+contrato usado pelo Mobile e pelo React sem criar dependência adicional agora.
 
-- uma chamada HTTP em cada operação;
-- mais DTOs e mapeamentos duplicados;
-- mais configuração, autenticação e tratamento de falha;
-- mais um processo para publicar e monitorar;
-- risco de indisponibilidade sem uma regra de negócio própria que justifique o
-  limite.
+A API de conexão com banco poderá ser evoluída posteriormente, mas deverá ter
+um contrato interno claro, autenticação entre serviços e uma responsabilidade
+real. Ela não deve ser um proxy genérico do MongoDB e não deve deslocar a
+persistência conversacional da AI API.
 
-Para o tamanho atual do projeto, isso seria complexidade sem benefício. O
-acesso ao PostgreSQL com Spring Data JPA deve ficar na própria Efficientia API.
+### 2.3 Assíncrono e NoSQL pertencem à AI API
 
-A separação poderá ser reconsiderada apenas se, no futuro, os dados precisarem
-ser compartilhados por vários produtos com regras e ciclo de implantação
-próprios.
-
-### 2.3 Assíncrono não exige uma terceira API
-
-Processamento assíncrono é uma forma de execução, não um limite de serviço. A
-mesma API pode:
+O processamento assíncrono da IA é responsabilidade da AI API. Ela pode:
 
 1. receber a requisição;
 2. validar e persistir o estado inicial;
@@ -87,7 +94,9 @@ URL JDBC, usuário ou senha e nunca se conecta ao PostgreSQL ou MongoDB.
 Fluxo correto:
 
 ```text
-Mobile -> POST multipart -> Efficientia API -> storage + PostgreSQL
+Mobile -> HTTP -> Efficientia API -> storage + PostgreSQL
+React -> HTTP -> Efficientia API -> PostgreSQL
+React -> HTTP -> Efficientia AI API -> MongoDB/Redis
 ```
 
 Fluxo proibido:
@@ -96,6 +105,8 @@ Fluxo proibido:
 Mobile -> JDBC/PostgreSQL
 Mobile -> MongoDB
 Web -> JDBC/PostgreSQL
+React -> MongoDB
+Efficientia API -> MongoDB
 ```
 
 ---
@@ -131,7 +142,9 @@ A distribuição dos bancos fica assim:
 | Storage local/MinIO | Efficientia API | Conteúdo binário de PDF e PNG |
 
 MongoDB não deve duplicar os metadados dos documentos apenas para cumprir um
-requisito. Seu uso natural neste projeto é a interação conversacional.
+requisito. Seu uso natural neste projeto é a interação conversacional e ele é
+consumido exclusivamente pela AI API. A API REST Principal consulta seus dados
+relacionais no PostgreSQL.
 
 ### 3.3 Engenharia de Software
 
@@ -146,12 +159,12 @@ A documentação e a implementação devem conter:
 - Conventional Commits, Pull Request e CI;
 - rastreabilidade entre requisitos e endpoints.
 
-### 3.4 API adicional para NoSQL
+### 3.4 API de conexão com banco
 
-Criar outra API Java apenas para NoSQL é um requisito **extra**, não o desenho
-recomendado para o primeiro incremento. Se o grupo decidir buscar esse extra,
-essa API deverá possuir uma responsabilidade real e um contrato próprio. Ela
-não deve ser um proxy genérico do MongoDB.
+A API de conexão com banco é uma etapa posterior do projeto. Ela não substitui
+a AI API, não consome MongoDB em nome da REST e não deve duplicar as regras de
+negócio da API REST Principal. Sua implementação só deve começar depois que o
+contrato entre serviços estiver definido.
 
 ---
 
@@ -161,8 +174,9 @@ não deve ser um proxy genérico do MongoDB.
 | --- | --- |
 | Aplicativo móvel | Capturar assinatura ou documento e enviá-lo |
 | Efficientia API | Validar, armazenar, persistir metadados, listar e entregar documentos |
-| Sistema web React | Listar, visualizar e baixar documentos; conversar com a IA |
+| Sistema web React | Usar a Efficientia API para dados/documentos e a AI API para conversa |
 | Efficientia AI API (Python/FastAPI) | Receber mensagens, acionar o agente e sincronizar documentos para RAG |
+| API de conexão com banco | Etapa posterior; contrato interno ainda não participa do fluxo atual |
 | PostgreSQL | Persistir metadados relacionais |
 | Storage local/MinIO | Guardar PDF e PNG privados |
 | MongoDB | Guardar histórico e memória conversacional |
@@ -762,8 +776,10 @@ efficientia/
 └── pom.xml
 ```
 
-A Efficientia API não possui `DataApiClient`, DTOs internos de Data API ou uma
-segunda aplicação Java apenas para repassar os dados ao PostgreSQL.
+No escopo atual, a Efficientia API não possui `DataApiClient` nem DTOs internos
+de uma API de conexão. A eventual API de conexão com banco será uma aplicação
+separada, com contrato próprio, e não poderá ser um proxy genérico ou deslocar
+o acesso ao MongoDB da AI API.
 
 ---
 
@@ -1142,7 +1158,7 @@ Testes devem validar comportamento observável, não textos de placeholder.
 13. `GET /api/v1/documentos/{id}/conteudo` transmite somente binários;
 14. o cursor retorna itens em ordem determinística;
 15. controllers não acessam repository ou storage diretamente;
-16. não existe `DataApiClient` nem uma Data API pass-through;
+16. no escopo atual, não existe `DataApiClient` nem uma Data API pass-through; a API de conexão futura terá contrato próprio;
 17. erros seguem `application/problem+json`;
 18. nenhum segredo, documento ou assinatura real entra no commit;
 19. o diagrama de classes corresponde à estrutura de pacotes;
