@@ -80,14 +80,19 @@ Principal por JDBC. A aplicação deve usar a string JDBC do **Session pooler**
 na porta `5432`, com SSL obrigatório (`sslmode=require`). A porta `6543` do
 Transaction pooler não será usada pelo JPA/Hibernate nesta etapa.
 
-As credenciais ficam somente no ambiente local ou no ambiente de execução:
+As credenciais ficam somente no ambiente local ou no ambiente de execução. Para desenvolvimento,
+copie `.env.example` para `.env` na raiz da API e preencha:
 
 ```text
-SUPABASE_DB_URL=jdbc:postgresql://<host-do-session-pooler>:5432/postgres?sslmode=require
+SUPABASE_DB_URL=postgresql://<host-do-session-pooler>:5432/postgres?sslmode=require
 SUPABASE_DB_USERNAME=postgres.<project-ref>
 SUPABASE_DB_PASSWORD=<senha-do-banco>
 DB_SCHEMA=public
 ```
+
+O carregador aceita valores entre aspas e converte automaticamente a URL exibida pelo Supabase
+para o formato JDBC. Variáveis definidas diretamente no sistema ou no CI têm prioridade sobre o
+arquivo `.env`. O `.env` real é ignorado pelo Git e nunca deve ser versionado.
 
 O projeto também mantém fallback para `SPRING_DATASOURCE_URL`,
 `SPRING_DATASOURCE_USERNAME` e `SPRING_DATASOURCE_PASSWORD`, preservando a
