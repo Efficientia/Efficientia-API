@@ -400,7 +400,7 @@ Exemplo de relatório:
 
 ```json
 {
-  "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+  "viagemId": 1,
   "tipoDocumento": "RELATORIO_VIAGEM",
   "origem": "GERADO_SISTEMA",
   "assinanteId": null,
@@ -414,10 +414,10 @@ Exemplo de assinatura desenhada:
 
 ```json
 {
-  "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+  "viagemId": 1,
   "tipoDocumento": "ASSINATURA",
   "origem": "DESENHO",
-  "assinanteId": "0597794a8-bcb6-473e-88ed-2dfd882435d9",
+  "assinanteId": 2,
   "papelAssinante": "MOTORISTA",
   "modalidadeAssinatura": "DESENHO",
   "descricao": "Assinatura no desembarque"
@@ -437,10 +437,10 @@ Idempotency-Key: bf733845-2f29-40ae-b9bc-5af5a1512d2f
 
 ```json
 {
-  "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+  "viagemId": 1,
   "tipoDocumento": "ASSINATURA",
   "origem": "TEXTO",
-  "assinanteId": "0597794a8-bcb6-473e-88ed-2dfd882435d9",
+  "assinanteId": 2,
   "papelAssinante": "MOTORISTA",
   "modalidadeAssinatura": "TEXTO",
   "textoAssinatura": "João da Silva",
@@ -503,7 +503,7 @@ Content-Type: application/json
 ```json
 {
   "id": "0d5118fc-5814-4459-8b47-996e1d3e73f7",
-  "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+  "viagemId": 1,
   "tipoDocumento": "RELATORIO_VIAGEM",
   "origem": "GERADO_SISTEMA",
   "nomeOriginal": "diario-viagem-2026-05-20.pdf",
@@ -522,7 +522,7 @@ Resposta de uma assinatura textual:
 ```json
 {
   "id": "f889f18b-35b4-4d83-992d-0b2761c9c640",
-  "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+  "viagemId": 1,
   "tipoDocumento": "ASSINATURA",
   "origem": "TEXTO",
   "modalidadeAssinatura": "TEXTO",
@@ -598,7 +598,7 @@ Regras:
   "itens": [
     {
       "id": "0d5118fc-5814-4459-8b47-996e1d3e73f7",
-      "viagemId": "a360a55c-3a13-4629-8119-25130247ea9a",
+      "viagemId": 1,
       "tipoDocumento": "RELATORIO_VIAGEM",
       "modalidadeAssinatura": null,
       "textoAssinatura": null,
@@ -671,10 +671,10 @@ nos metadados.
 
 ```text
 id                       UUID PK
-viagem_id                UUID FK, not null
+viagem_id                INTEGER FK, not null
 tipo_documento           VARCHAR com CHECK, not null
 origem                   VARCHAR com CHECK, not null
-assinante_id             UUID FK, nullable
+assinante_id             INTEGER FK, nullable
 papel_assinante          VARCHAR com CHECK, nullable
 modalidade_assinatura    VARCHAR com CHECK, nullable
 texto_assinatura         VARCHAR(150), nullable
@@ -685,11 +685,16 @@ tamanho_bytes            BIGINT, nullable
 sha256                   CHAR(64), nullable
 storage_key              VARCHAR(500), unique, nullable
 idempotency_key          UUID, unique, not null
-criado_por               UUID, nullable
+criado_por               INTEGER FK, nullable
 criado_em                TIMESTAMPTZ, not null
 atualizado_em            TIMESTAMPTZ, not null
 versao                   BIGINT, not null
 ```
+
+Os campos `viagem_id`, `assinante_id` e `criado_por` usam `INTEGER` para
+referenciar as chaves `SERIAL` já existentes em `relatorio_viagem` e `usuario`.
+Somente o identificador público do documento e a chave de idempotência usam
+UUID.
 
 Uma constraint deve garantir a exclusividade:
 
