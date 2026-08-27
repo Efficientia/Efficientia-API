@@ -79,10 +79,10 @@ package "Efficientia API — Java/Spring Boot" #DBEAFE {
 
     class DocumentoEntity <<JPA entity>> {
       +id: UUID
-      +viagemId: UUID
+      +viagemId: Integer
       +tipoDocumento: TipoDocumento
       +origem: OrigemDocumento
-      +assinanteId: UUID
+      +assinanteId: Integer
       +papelAssinante: PapelAssinante
       +modalidadeAssinatura: ModalidadeAssinatura
       +textoAssinatura: String [0..1]
@@ -132,18 +132,18 @@ package "Efficientia API — Java/Spring Boot" #DBEAFE {
 
   package "dto" {
     class DocumentoMetadataRequest <<record>> {
-      +viagemId: UUID
+      +viagemId: Integer
       +tipoDocumento: TipoDocumento
       +origem: OrigemDocumento
-      +assinanteId: UUID
+      +assinanteId: Integer
       +papelAssinante: PapelAssinante
       +modalidadeAssinatura: ModalidadeAssinatura
       +descricao: String
     }
 
     class AssinaturaTextoRequest <<record>> {
-      +viagemId: UUID
-      +assinanteId: UUID
+      +viagemId: Integer
+      +assinanteId: Integer
       +papelAssinante: PapelAssinante
       +modalidadeAssinatura: TEXTO
       +textoAssinatura: String
