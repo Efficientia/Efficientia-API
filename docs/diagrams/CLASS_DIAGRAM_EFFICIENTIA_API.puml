@@ -107,7 +107,7 @@ package "Efficientia API — Java/Spring Boot" #DBEAFE {
 
   package "storage" {
     interface StorageService <<interface>> {
-      +salvar(documentoId, arquivo, sha256): String
+      +salvar(documentoId, nomeOriginal, mimeType, conteudo): ArquivoArmazenado
       +abrir(storageKey): StoredDocument
       +remover(storageKey): void
     }
@@ -116,18 +116,23 @@ package "Efficientia API — Java/Spring Boot" #DBEAFE {
 
     class StoredDocument <<record>> {
       +conteudo: Resource
-      +nomeOriginal: String
       +mimeType: String
       +tamanhoBytes: long
     }
 
-    class ArquivoMetadata <<record>> {
+    class ArquivoArmazenado <<record>> {
       +nomeOriginal: String
       +mimeType: String
       +tamanhoBytes: long
       +sha256: String
       +storageKey: String
     }
+
+    class StorageException <<exception>>
+    class StorageValidationException <<exception>> {
+      +reason: Reason
+    }
+    class StorageFileNotFoundException <<exception>>
   }
 
   package "dto" {
@@ -208,7 +213,6 @@ package "Efficientia API — Java/Spring Boot" #DBEAFE {
     class ArquivoInvalidoException <<exception>>
     class AssinaturaInvalidaException <<exception>>
     class DocumentoNaoEncontradoException <<exception>>
-    class StorageException <<exception>>
     class StorageProperties <<ConfigurationProperties>>
   }
 
@@ -231,11 +235,11 @@ DocumentoService --> DocumentoRepository
 DocumentoService --> StorageService
 DocumentoService --> DocumentoMapper
 DocumentoService ..> StoredDocument
+DocumentoService ..> ArquivoArmazenado
 
 DocumentoRepository --> DocumentoEntity
 DocumentoRepository ..> PostgreSQL : Spring Data JPA
 DocumentoMapper ..> DocumentoEntity
-DocumentoMapper ..> ArquivoMetadata
 DocumentoMapper ..> DocumentoResponse
 
 DocumentoEntity --> TipoDocumento
@@ -250,6 +254,9 @@ LocalStorageService ..|> StorageService
 LocalStorageService --> StorageProperties
 StorageService --> StoragePrivado
 StorageService ..> StoredDocument
+StorageService ..> ArquivoArmazenado
+StorageValidationException --|> StorageException
+StorageFileNotFoundException --|> StorageException
 
 ApiExceptionHandler ..> ArquivoInvalidoException
 ApiExceptionHandler ..> AssinaturaInvalidaException

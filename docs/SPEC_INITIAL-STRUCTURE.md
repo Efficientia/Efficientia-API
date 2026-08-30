@@ -236,8 +236,9 @@ Motivos:
 
 ### 6.2 Desenvolvimento local
 
-Na primeira entrega, `LocalStorageService` pode salvar os arquivos em um
-diretório configurado fora do repositório Git.
+Na primeira entrega, `LocalStorageService` salva os arquivos em um diretório
+privado configurável. O nome original é mantido apenas como metadado: o caminho
+físico usa UUIDs internos e nunca recebe texto controlado pelo cliente.
 
 ```properties
 app.document-storage.path=./data/documentos
@@ -761,8 +762,12 @@ efficientia/
 │   │   │   ├── service/
 │   │   │   │   └── DocumentoService.java
 │   │   │   ├── storage/
+│   │   │   │   ├── ArquivoArmazenado.java
 │   │   │   │   ├── LocalStorageService.java
+│   │   │   │   ├── StorageException.java
+│   │   │   │   ├── StorageFileNotFoundException.java
 │   │   │   │   ├── StorageService.java
+│   │   │   │   ├── StorageValidationException.java
 │   │   │   │   └── StoredDocument.java
 │   │   │   └── validation/
 │   │   │       ├── ArquivoValidator.java
@@ -861,14 +866,21 @@ assinatura. Ela nunca possui Base64 nem `byte[] conteudo`.
 
 ```java
 public interface StorageService {
-    String salvar(UUID documentoId, MultipartFile arquivo, String sha256);
+    ArquivoArmazenado salvar(
+            UUID documentoId,
+            String nomeOriginal,
+            String mimeType,
+            InputStream conteudo
+    );
     StoredDocument abrir(String storageKey);
     void remover(String storageKey);
 }
 ```
 
 `LocalStorageService` é a primeira implementação. Uma implementação MinIO pode
-ser adicionada sem alterar controller, DTO ou repository.
+ser adicionada sem alterar controller, DTO ou repository. O método `salvar`
+consome o conteúdo em streaming e calcula tamanho e SHA-256 na mesma passagem;
+o hash não é aceito como dado confiável vindo do cliente.
 
 ### 15.5 Validador
 
