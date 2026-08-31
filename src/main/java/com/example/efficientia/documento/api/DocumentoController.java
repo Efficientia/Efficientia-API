@@ -2,6 +2,10 @@ package com.example.efficientia.documento.api;
 
 import com.example.efficientia.documento.service.DocumentoService;
 import com.example.efficientia.documento.service.DocumentoConteudo;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.CacheControl;
@@ -34,6 +38,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 @RestController
 @RequestMapping("/api/v1/documentos")
+@Tag(name = "Documentos", description = "Upload, assinaturas, consulta e ciclo de vida de documentos")
 public class DocumentoController {
 
     private final DocumentoService service;
@@ -43,6 +48,15 @@ public class DocumentoController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Envia PDF ou PNG", description = "Cria o documento de forma idempotente e compensa o storage se o banco falhar.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Documento criado"),
+            @ApiResponse(responseCode = "400", description = "Contrato inválido"),
+            @ApiResponse(responseCode = "413", description = "Arquivo acima do limite"),
+            @ApiResponse(responseCode = "415", description = "Conteúdo não é PDF ou PNG"),
+            @ApiResponse(responseCode = "422", description = "Regra de assinatura violada"),
+            @ApiResponse(responseCode = "503", description = "Storage indisponível")
+    })
     public ResponseEntity<DocumentoResponse> criarComArquivo(
             @Valid @RequestPart("metadados") DocumentoMetadataRequest metadados,
             @RequestPart("arquivo") MultipartFile arquivo,
@@ -55,6 +69,12 @@ public class DocumentoController {
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Cria assinatura textual acessível")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Assinatura criada"),
+            @ApiResponse(responseCode = "400", description = "Contrato inválido"),
+            @ApiResponse(responseCode = "422", description = "Regra de assinatura violada")
+    })
     public ResponseEntity<DocumentoResponse> criarAssinaturaTextual(
             @Valid @RequestBody AssinaturaTextoRequest request,
             @RequestHeader("Idempotency-Key") UUID idempotencyKey
@@ -66,6 +86,11 @@ public class DocumentoController {
     }
 
     @GetMapping
+    @Operation(summary = "Lista documentos", description = "Suporta paginação para o site ou cursor opaco para sincronização.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Página ou lote retornado"),
+            @ApiResponse(responseCode = "400", description = "Filtro, paginação ou cursor inválido")
+    })
     public PaginaDocumentosResponse listar(
             @RequestParam(required = false) Integer page,
             @RequestParam(required = false) String cursor,
@@ -97,11 +122,23 @@ public class DocumentoController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Consulta metadados públicos por UUID")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Documento encontrado"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado")
+    })
     public DocumentoResponse buscar(@PathVariable UUID id) {
         return service.buscar(id);
     }
 
     @GetMapping("/{id}/conteudo")
+    @Operation(summary = "Transmite o conteúdo privado", description = "Use inline=true para pré-visualização.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Conteúdo transmitido por Resource"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Assinatura textual não possui binário"),
+            @ApiResponse(responseCode = "503", description = "Storage indisponível")
+    })
     public ResponseEntity<Resource> buscarConteudo(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "false") boolean inline
@@ -121,6 +158,13 @@ public class DocumentoController {
     }
 
     @PatchMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Atualiza a descrição com versão otimista")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Documento atualizado"),
+            @ApiResponse(responseCode = "400", description = "Contrato inválido"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado"),
+            @ApiResponse(responseCode = "409", description = "Versão concorrente")
+    })
     public DocumentoResponse atualizar(
             @PathVariable UUID id,
             @Valid @RequestBody AtualizarDocumentoRequest request
@@ -129,6 +173,12 @@ public class DocumentoController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Exclui metadados e conteúdo privado")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Documento excluído"),
+            @ApiResponse(responseCode = "404", description = "Documento não encontrado"),
+            @ApiResponse(responseCode = "503", description = "Storage indisponível")
+    })
     public ResponseEntity<Void> excluir(@PathVariable UUID id) {
         service.excluir(id);
         return ResponseEntity.noContent().build();

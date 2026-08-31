@@ -7,7 +7,11 @@ import com.example.efficientia.documento.domain.PapelAssinante;
 import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.service.DocumentoService;
 import com.example.efficientia.documento.service.DocumentoConteudo;
+import com.example.efficientia.documento.exception.ArquivoInvalidoException;
+import com.example.efficientia.documento.exception.RegraDocumentoException;
+import com.example.efficientia.documento.storage.StorageException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -47,6 +51,11 @@ class DocumentoControllerTest {
 
     @Autowired
     private DocumentoService service;
+
+    @BeforeEach
+    void limparMockDoService() {
+        Mockito.reset(service);
+    }
 
     @Test
     void deveCriarDocumentoMultipartComLocation() throws Exception {
@@ -136,7 +145,12 @@ class DocumentoControllerTest {
 
         mockMvc.perform(get("/api/v1/documentos/{id}", id))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.title").value("Documento não encontrado"));
+                .andExpect(header().exists("X-Correlation-Id"))
+                .andExpect(header().string("Content-Type", org.hamcrest.Matchers.containsString("application/problem+json")))
+                .andExpect(jsonPath("$.title").value("Documento não encontrado"))
+                .andExpect(jsonPath("$.code").value("DOCUMENTO_NAO_ENCONTRADO"))
+                .andExpect(jsonPath("$.timestamp").exists())
+                .andExpect(jsonPath("$.correlationId").exists());
     }
 
     @Test
@@ -190,6 +204,73 @@ class DocumentoControllerTest {
         mockMvc.perform(delete("/api/v1/documentos/{id}", id))
                 .andExpect(status().isNoContent());
         Mockito.verify(service).excluir(id);
+    }
+
+    @Test
+    void devePadronizar413ParaArquivoAcimaDoLimite() throws Exception {
+        when(service.criarComArquivo(any(), any(), any())).thenThrow(
+                new ArquivoInvalidoException(
+                        ArquivoInvalidoException.Reason.SIZE_LIMIT_EXCEEDED,
+                        "Arquivo excede o limite."
+                )
+        );
+
+        mockMvc.perform(multipart("/api/v1/documentos")
+                        .file(metadadosValidos()).file(pdfValido())
+                        .header("Idempotency-Key", UUID.randomUUID()))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.code").value("ARQUIVO_MUITO_GRANDE"));
+    }
+
+    @Test
+    void devePadronizar415ParaMimeFalso() throws Exception {
+        when(service.criarComArquivo(any(), any(), any())).thenThrow(
+                new ArquivoInvalidoException(
+                        ArquivoInvalidoException.Reason.UNSUPPORTED_MEDIA_TYPE,
+                        "MIME incompatível."
+                )
+        );
+
+        mockMvc.perform(multipart("/api/v1/documentos")
+                        .file(metadadosValidos()).file(pdfValido())
+                        .header("Idempotency-Key", UUID.randomUUID()))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.code").value("TIPO_ARQUIVO_NAO_SUPORTADO"));
+    }
+
+    @Test
+    void devePadronizar422ParaRegraDeAssinatura() throws Exception {
+        when(service.criarAssinaturaTextual(any(), any()))
+                .thenThrow(new RegraDocumentoException("Modalidade incompatível."));
+
+        mockMvc.perform(post("/api/v1/documentos")
+                        .contentType(APPLICATION_JSON)
+                        .header("Idempotency-Key", UUID.randomUUID())
+                        .content(jsonAssinatura("João")))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("REGRA_DOCUMENTO_VIOLADA"));
+    }
+
+    @Test
+    void devePadronizar503SemExporFalhaInternaDoStorage() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.buscarConteudo(id)).thenThrow(new StorageException("caminho interno sensível"));
+
+        mockMvc.perform(get("/api/v1/documentos/{id}/conteudo", id))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("STORAGE_INDISPONIVEL"))
+                .andExpect(jsonPath("$.detail").value("Não foi possível concluir a operação com o arquivo."));
+    }
+
+    @Test
+    void deveRejeitarCampoNaoPermitidoNoPatch() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(patch("/api/v1/documentos/{id}", id)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"versao\":0,\"storageKey\":\"segredo\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("REQUISICAO_INVALIDA"));
     }
 
     private MockMultipartFile metadadosValidos() {

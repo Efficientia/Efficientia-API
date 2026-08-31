@@ -10,10 +10,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
 import static com.example.efficientia.documento.exception.ArquivoInvalidoException.Reason.INVALID_FILE;
+import static com.example.efficientia.documento.exception.ArquivoInvalidoException.Reason.SIZE_LIMIT_EXCEEDED;
 import static com.example.efficientia.documento.exception.ArquivoInvalidoException.Reason.UNSUPPORTED_MEDIA_TYPE;
 
 @Component
 public class ArquivoValidator {
+
+    private static final long MAX_PDF_BYTES = 25L * 1024 * 1024;
+    private static final long MAX_PNG_BYTES = 10L * 1024 * 1024;
 
     private static final byte[] PDF_SIGNATURE = "%PDF-".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] PNG_SIGNATURE = new byte[]{
@@ -35,6 +39,7 @@ public class ArquivoValidator {
             MediaDefinition media = detectar(cabecalho);
             validarHeader(arquivo.getContentType(), media.mimeType());
             validarExtensao(nomeOriginal, media.extension());
+            validarTamanho(arquivo.getSize(), media.maxBytes());
             return new ArquivoValidado(nomeOriginal, media.mimeType(), input);
         } catch (RuntimeException | IOException exception) {
             fecharSilenciosamente(input);
@@ -55,10 +60,10 @@ public class ArquivoValidator {
 
     private MediaDefinition detectar(byte[] cabecalho) {
         if (comecaCom(cabecalho, PDF_SIGNATURE)) {
-            return new MediaDefinition("application/pdf", ".pdf");
+            return new MediaDefinition("application/pdf", ".pdf", MAX_PDF_BYTES);
         }
         if (comecaCom(cabecalho, PNG_SIGNATURE)) {
-            return new MediaDefinition("image/png", ".png");
+            return new MediaDefinition("image/png", ".png", MAX_PNG_BYTES);
         }
         throw new ArquivoInvalidoException(
                 UNSUPPORTED_MEDIA_TYPE,
@@ -96,6 +101,15 @@ public class ArquivoValidator {
         }
     }
 
+    private void validarTamanho(long tamanho, long maximo) {
+        if (tamanho > maximo) {
+            throw new ArquivoInvalidoException(
+                    SIZE_LIMIT_EXCEEDED,
+                    "O arquivo excede o limite permitido para o tipo detectado."
+            );
+        }
+    }
+
     private String sanitizarNome(String original) {
         if (original == null) {
             throw new ArquivoInvalidoException(INVALID_FILE, "O nome original do arquivo é obrigatório.");
@@ -118,6 +132,6 @@ public class ArquivoValidator {
         }
     }
 
-    private record MediaDefinition(String mimeType, String extension) {
+    private record MediaDefinition(String mimeType, String extension, long maxBytes) {
     }
 }

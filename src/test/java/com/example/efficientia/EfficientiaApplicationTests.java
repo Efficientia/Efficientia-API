@@ -6,6 +6,7 @@ import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCarretaRepository;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCavaloRepository;
 import com.example.efficientia.documento.persistence.DocumentoRepository;
+import com.example.efficientia.documento.audit.DocumentoAuditRepository;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -14,14 +15,34 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(EfficientiaApplicationTests.TestDependencies.class)
 class EfficientiaApplicationTests {
 
+	@Autowired
+	private MockMvc mockMvc;
+
 	@Test
 	void contextLoads() {
+	}
+
+	@Test
+	void devePublicarContratoOpenApiDosDocumentos() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.info.title").value("Efficientia API REST Principal"))
+				.andExpect(jsonPath("$.paths['/api/v1/documentos/{id}/conteudo'].get.responses['409']").exists())
+				.andExpect(jsonPath("$.paths['/api/v1/documentos/{id}'].patch.responses['409']").exists());
 	}
 
 	@TestConfiguration(proxyBeanMethods = false)
@@ -35,6 +56,11 @@ class EfficientiaApplicationTests {
 		@Bean
 		DocumentoRepository documentoRepository() {
 			return Mockito.mock(DocumentoRepository.class);
+		}
+
+		@Bean
+		DocumentoAuditRepository documentoAuditRepository() {
+			return Mockito.mock(DocumentoAuditRepository.class);
 		}
 
 		@Bean
