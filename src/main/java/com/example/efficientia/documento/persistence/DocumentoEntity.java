@@ -153,6 +153,7 @@ public class DocumentoEntity {
     public Instant getAtualizadoEm() { return atualizadoEm; }
     public Long getVersao() { return versao; }
 
+    public void setId(UUID id) { this.id = id; }
     public void setViagemId(Integer viagemId) { this.viagemId = viagemId; }
     public void setTipoDocumento(TipoDocumento tipoDocumento) { this.tipoDocumento = tipoDocumento; }
     public void setOrigem(OrigemDocumento origem) { this.origem = origem; }
