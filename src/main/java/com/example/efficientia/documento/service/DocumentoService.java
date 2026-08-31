@@ -9,11 +9,13 @@ import com.example.efficientia.documento.api.PaginaDocumentosResponse;
 import com.example.efficientia.documento.domain.DocumentoCursor;
 import com.example.efficientia.documento.exception.DocumentoInvalidoException;
 import com.example.efficientia.documento.exception.DocumentoNaoEncontradoException;
+import com.example.efficientia.documento.exception.DocumentoSemConteudoException;
 import com.example.efficientia.documento.persistence.DocumentoEntity;
 import com.example.efficientia.documento.persistence.DocumentoFiltro;
 import com.example.efficientia.documento.persistence.DocumentoRepository;
 import com.example.efficientia.documento.storage.ArquivoArmazenado;
 import com.example.efficientia.documento.storage.StorageService;
+import com.example.efficientia.documento.storage.StoredDocument;
 import com.example.efficientia.documento.validation.ArquivoValidado;
 import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
@@ -106,6 +108,27 @@ public class DocumentoService {
         return repository.findById(id)
                 .map(mapper::paraResponse)
                 .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentoConteudo buscarConteudo(UUID id) {
+        if (id == null) {
+            throw new DocumentoInvalidoException("O identificador do documento é obrigatório.");
+        }
+
+        DocumentoEntity documento = repository.findById(id)
+                .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        if (!documento.temArquivo()) {
+            throw new DocumentoSemConteudoException(id);
+        }
+
+        StoredDocument armazenado = storage.abrir(documento.getStorageKey());
+        return new DocumentoConteudo(
+                armazenado.conteudo(),
+                armazenado.mimeType(),
+                armazenado.tamanhoBytes(),
+                documento.getNomeOriginal()
+        );
     }
 
     private DocumentoResponse criarNovoComArquivo(

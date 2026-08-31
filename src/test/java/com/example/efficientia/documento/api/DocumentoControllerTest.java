@@ -6,6 +6,7 @@ import com.example.efficientia.documento.domain.ModalidadeAssinatura;
 import com.example.efficientia.documento.domain.PapelAssinante;
 import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.service.DocumentoService;
+import com.example.efficientia.documento.service.DocumentoConteudo;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -133,6 +135,38 @@ class DocumentoControllerTest {
         mockMvc.perform(get("/api/v1/documentos/{id}", id))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.title").value("Documento não encontrado"));
+    }
+
+    @Test
+    void deveTransmitirConteudoInlineComHeadersPrivados() throws Exception {
+        UUID id = UUID.randomUUID();
+        byte[] bytes = "%PDF-stream".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        when(service.buscarConteudo(id)).thenReturn(new DocumentoConteudo(
+                new ByteArrayResource(bytes),
+                "application/pdf",
+                bytes.length,
+                "relatório final.pdf"
+        ));
+
+        mockMvc.perform(get("/api/v1/documentos/{id}/conteudo", id).param("inline", "true"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Length", String.valueOf(bytes.length)))
+                .andExpect(header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(header().string("Content-Disposition", org.hamcrest.Matchers.startsWith("inline")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().bytes(bytes));
+    }
+
+    @Test
+    void deveRetornarConflitoParaAssinaturaTextualSemBinario() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.buscarConteudo(id)).thenThrow(
+                new com.example.efficientia.documento.exception.DocumentoSemConteudoException(id)
+        );
+
+        mockMvc.perform(get("/api/v1/documentos/{id}/conteudo", id))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Documento sem conteúdo"));
     }
 
     private MockMultipartFile metadadosValidos() {

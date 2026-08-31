@@ -1,9 +1,14 @@
 package com.example.efficientia.documento.api;
 
 import com.example.efficientia.documento.service.DocumentoService;
+import com.example.efficientia.documento.service.DocumentoConteudo;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -91,5 +97,24 @@ public class DocumentoController {
     @GetMapping("/{id}")
     public DocumentoResponse buscar(@PathVariable UUID id) {
         return service.buscar(id);
+    }
+
+    @GetMapping("/{id}/conteudo")
+    public ResponseEntity<Resource> buscarConteudo(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "false") boolean inline
+    ) {
+        DocumentoConteudo conteudo = service.buscarConteudo(id);
+        ContentDisposition disposition = ContentDisposition
+                .builder(inline ? "inline" : "attachment")
+                .filename(conteudo.nomeOriginal(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(conteudo.mimeType()))
+                .contentLength(conteudo.tamanhoBytes())
+                .cacheControl(CacheControl.noStore().cachePrivate())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .body(conteudo.resource());
     }
 }
