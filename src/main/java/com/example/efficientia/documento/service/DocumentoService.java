@@ -2,11 +2,16 @@ package com.example.efficientia.documento.service;
 
 import com.example.efficientia.documento.api.DocumentoMapper;
 import com.example.efficientia.documento.api.AssinaturaTextoRequest;
+import com.example.efficientia.documento.api.AtualizarDocumentoRequest;
 import com.example.efficientia.documento.api.DocumentoMetadataRequest;
 import com.example.efficientia.documento.api.DocumentoResponse;
 import com.example.efficientia.documento.api.DocumentoListagemRequest;
 import com.example.efficientia.documento.api.PaginaDocumentosResponse;
 import com.example.efficientia.documento.domain.DocumentoCursor;
+import com.example.efficientia.documento.audit.DocumentoAuditEntity;
+import com.example.efficientia.documento.audit.DocumentoAuditOperation;
+import com.example.efficientia.documento.audit.DocumentoAuditRepository;
+import com.example.efficientia.documento.exception.DocumentoConcorrenteException;
 import com.example.efficientia.documento.exception.DocumentoInvalidoException;
 import com.example.efficientia.documento.exception.DocumentoNaoEncontradoException;
 import com.example.efficientia.documento.exception.DocumentoSemConteudoException;
@@ -21,6 +26,9 @@ import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -40,6 +48,7 @@ public class DocumentoService {
     private final AssinaturaValidator assinaturaValidator;
     private final DocumentoCursorCodec cursorCodec;
     private final DocumentoMapper mapper;
+    private final DocumentoAuditRepository auditRepository;
 
     public DocumentoService(
             DocumentoRepository repository,
@@ -47,7 +56,8 @@ public class DocumentoService {
             ArquivoValidator arquivoValidator,
             AssinaturaValidator assinaturaValidator,
             DocumentoCursorCodec cursorCodec,
-            DocumentoMapper mapper
+            DocumentoMapper mapper,
+            DocumentoAuditRepository auditRepository
     ) {
         this.repository = repository;
         this.storage = storage;
@@ -55,6 +65,7 @@ public class DocumentoService {
         this.assinaturaValidator = assinaturaValidator;
         this.cursorCodec = cursorCodec;
         this.mapper = mapper;
+        this.auditRepository = auditRepository;
     }
 
     @Transactional
@@ -129,6 +140,50 @@ public class DocumentoService {
                 armazenado.tamanhoBytes(),
                 documento.getNomeOriginal()
         );
+    }
+
+    @Transactional
+    public DocumentoResponse atualizar(UUID id, AtualizarDocumentoRequest request) {
+        if (id == null || request == null || request.versao() == null) {
+            throw new DocumentoInvalidoException("Documento e versão são obrigatórios para atualização.");
+        }
+
+        DocumentoEntity documento = repository.findById(id)
+                .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        if (!request.versao().equals(documento.getVersao())) {
+            throw new DocumentoConcorrenteException(id);
+        }
+
+        documento.setDescricao(normalizarDescricao(request.descricao()));
+        try {
+            DocumentoEntity atualizado = repository.saveAndFlush(documento);
+            auditar(atualizado, DocumentoAuditOperation.ATUALIZACAO,
+                    "Descrição atualizada na versão " + atualizado.getVersao() + ".");
+            return mapper.paraResponse(atualizado);
+        } catch (ObjectOptimisticLockingFailureException exception) {
+            throw new DocumentoConcorrenteException(id);
+        }
+    }
+
+    @Transactional
+    public void excluir(UUID id) {
+        if (id == null) {
+            throw new DocumentoInvalidoException("O identificador do documento é obrigatório.");
+        }
+
+        DocumentoEntity documento = repository.findById(id)
+                .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        String storageKey = documento.getStorageKey();
+
+        auditar(documento, DocumentoAuditOperation.EXCLUSAO,
+                documento.temArquivo() ? "Metadados excluídos; remoção privada agendada."
+                        : "Assinatura textual excluída sem acesso ao storage.");
+        repository.delete(documento);
+        repository.flush();
+
+        if (storageKey != null) {
+            removerStorageAposCommit(storageKey);
+        }
     }
 
     private DocumentoResponse criarNovoComArquivo(
@@ -227,6 +282,40 @@ public class DocumentoService {
         } catch (RuntimeException falhaCompensacao) {
             falhaOriginal.addSuppressed(falhaCompensacao);
         }
+    }
+
+    private String normalizarDescricao(String descricao) {
+        if (descricao == null) {
+            return null;
+        }
+        String normalizada = descricao.strip();
+        return normalizada.isEmpty() ? null : normalizada;
+    }
+
+    private void auditar(
+            DocumentoEntity documento,
+            DocumentoAuditOperation operacao,
+            String detalhes
+    ) {
+        DocumentoAuditEntity evento = new DocumentoAuditEntity();
+        evento.setDocumentoId(documento.getId());
+        evento.setOperacao(operacao);
+        evento.setUsuarioId(documento.getCriadoPor());
+        evento.setDetalhes(detalhes);
+        auditRepository.save(evento);
+    }
+
+    private void removerStorageAposCommit(String storageKey) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            storage.remover(storageKey);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                storage.remover(storageKey);
+            }
+        });
     }
 
     private PaginaDocumentosResponse listarPorPagina(

@@ -4,6 +4,7 @@ import com.example.efficientia.documento.exception.ArquivoInvalidoException;
 import com.example.efficientia.documento.exception.DocumentoInvalidoException;
 import com.example.efficientia.documento.exception.DocumentoNaoEncontradoException;
 import com.example.efficientia.documento.exception.DocumentoSemConteudoException;
+import com.example.efficientia.documento.exception.DocumentoConcorrenteException;
 import com.example.efficientia.documento.storage.StorageException;
 import com.example.efficientia.documento.storage.StorageValidationException;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,11 @@ public class DocumentoExceptionHandler {
     @ExceptionHandler(DocumentoSemConteudoException.class)
     public ProblemDetail documentoSemConteudo(DocumentoSemConteudoException exception) {
         return problem(HttpStatus.CONFLICT, "Documento sem conteúdo", exception.getMessage());
+    }
+
+    @ExceptionHandler(DocumentoConcorrenteException.class)
+    public ProblemDetail documentoConcorrente(DocumentoConcorrenteException exception) {
+        return problem(HttpStatus.CONFLICT, "Atualização concorrente", exception.getMessage());
     }
 
     @ExceptionHandler(DocumentoInvalidoException.class)

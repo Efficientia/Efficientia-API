@@ -9,6 +9,7 @@ import com.example.efficientia.documento.storage.StorageService;
 import com.example.efficientia.documento.storage.StoredDocument;
 import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
+import com.example.efficientia.documento.audit.DocumentoAuditRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 
@@ -32,7 +33,8 @@ class DocumentoDownloadServiceTest {
             mock(ArquivoValidator.class),
             mock(AssinaturaValidator.class),
             mock(DocumentoCursorCodec.class),
-            mock(DocumentoMapper.class)
+            mock(DocumentoMapper.class),
+            mock(DocumentoAuditRepository.class)
     );
 
     @Test

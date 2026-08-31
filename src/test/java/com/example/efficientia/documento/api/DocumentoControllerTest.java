@@ -27,6 +27,8 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -167,6 +169,27 @@ class DocumentoControllerTest {
         mockMvc.perform(get("/api/v1/documentos/{id}/conteudo", id))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.title").value("Documento sem conteúdo"));
+    }
+
+    @Test
+    void deveAtualizarDescricaoPorPatch() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.atualizar(org.mockito.ArgumentMatchers.eq(id), any())).thenReturn(response(id));
+
+        mockMvc.perform(patch("/api/v1/documentos/{id}", id)
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"versao\":0,\"descricao\":\"Revisado\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()));
+    }
+
+    @Test
+    void deveExcluirDocumentoCom204() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/v1/documentos/{id}", id))
+                .andExpect(status().isNoContent());
+        Mockito.verify(service).excluir(id);
     }
 
     private MockMultipartFile metadadosValidos() {
