@@ -173,4 +173,5 @@ public class DocumentoEntity {
     public void setCriadoPor(Integer criadoPor) { this.criadoPor = criadoPor; }
     public void setCriadoEm(Instant criadoEm) { this.criadoEm = criadoEm; }
     public void setAtualizadoEm(Instant atualizadoEm) { this.atualizadoEm = atualizadoEm; }
+    public void setVersao(Long versao) { this.versao = versao; }
 }

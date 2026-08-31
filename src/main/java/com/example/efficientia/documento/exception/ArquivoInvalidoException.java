@@ -17,6 +17,7 @@ public class ArquivoInvalidoException extends RuntimeException {
 
     public enum Reason {
         INVALID_FILE,
+        SIZE_LIMIT_EXCEEDED,
         UNSUPPORTED_MEDIA_TYPE
     }
 }

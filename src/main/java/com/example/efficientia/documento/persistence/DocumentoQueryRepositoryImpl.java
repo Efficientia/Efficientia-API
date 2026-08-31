@@ -8,6 +8,9 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Path;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
+import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemEntity;
+import com.example.efficientia.security.DocumentoAccessScope;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -32,7 +35,7 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<DocumentoEntity> criteria = builder.createQuery(DocumentoEntity.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
-        criteria.select(root).where(predicados(builder, root, filtro, null).toArray(Predicate[]::new));
+        criteria.select(root).where(predicados(builder, criteria, root, filtro, null).toArray(Predicate[]::new));
         criteria.orderBy(ordenacao(builder, root, pageable.getSort()));
 
         TypedQuery<DocumentoEntity> query = entityManager.createQuery(criteria);
@@ -52,7 +55,7 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<DocumentoEntity> criteria = builder.createQuery(DocumentoEntity.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
-        criteria.select(root).where(predicados(builder, root, filtro, cursor).toArray(Predicate[]::new));
+        criteria.select(root).where(predicados(builder, criteria, root, filtro, cursor).toArray(Predicate[]::new));
         criteria.orderBy(builder.asc(root.get("criadoEm")), builder.asc(root.get("id")));
 
         List<DocumentoEntity> encontrados = entityManager.createQuery(criteria)
@@ -75,12 +78,13 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaQuery<Long> criteria = builder.createQuery(Long.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
         criteria.select(builder.count(root))
-                .where(predicados(builder, root, filtro, null).toArray(Predicate[]::new));
+                .where(predicados(builder, criteria, root, filtro, null).toArray(Predicate[]::new));
         return entityManager.createQuery(criteria).getSingleResult();
     }
 
     private List<Predicate> predicados(
             CriteriaBuilder builder,
+            CriteriaQuery<?> criteria,
             Root<DocumentoEntity> root,
             DocumentoFiltro filtro,
             DocumentoCursor cursor
@@ -106,6 +110,19 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         }
         if (filtro.criadoAte() != null) {
             predicates.add(builder.lessThanOrEqualTo(root.get("criadoEm"), filtro.criadoAte()));
+        }
+        if (filtro.accessScope() == DocumentoAccessScope.MOTORISTA) {
+            Subquery<Integer> viagens = criteria.subquery(Integer.class);
+            Root<RelatorioViagemEntity> relatorio = viagens.from(RelatorioViagemEntity.class);
+            viagens.select(relatorio.get("id")).where(
+                    builder.equal(relatorio.get("motoristaId"), filtro.usuarioEscopoId())
+            );
+            predicates.add(root.get("viagemId").in(viagens));
+        } else if (filtro.accessScope() == DocumentoAccessScope.RESPONSAVEL) {
+            predicates.add(builder.or(
+                    builder.equal(root.get("criadoPor"), filtro.usuarioEscopoId()),
+                    builder.equal(root.get("assinanteId"), filtro.usuarioEscopoId())
+            ));
         }
         if (cursor != null) {
             predicates.add(builder.or(

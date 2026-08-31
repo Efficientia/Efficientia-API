@@ -15,6 +15,9 @@ import com.example.efficientia.documento.storage.ArquivoArmazenado;
 import com.example.efficientia.documento.storage.StorageService;
 import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
+import com.example.efficientia.documento.audit.DocumentoAuditRepository;
+import com.example.efficientia.security.DocumentoAccessPolicy;
+import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -58,7 +61,9 @@ class DocumentoServiceTest {
                 new ArquivoValidator(),
                 new AssinaturaValidator(),
                 new DocumentoCursorCodec(),
-                new DocumentoMapper()
+                new DocumentoMapper(),
+                mock(DocumentoAuditRepository.class),
+                new DocumentoAccessPolicy(mock(RelatorioViagemRepository.class))
         );
     }
 

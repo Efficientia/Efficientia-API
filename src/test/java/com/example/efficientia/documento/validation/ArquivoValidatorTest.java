@@ -7,11 +7,14 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.util.stream.Stream;
 
 import static com.example.efficientia.documento.exception.ArquivoInvalidoException.Reason.UNSUPPORTED_MEDIA_TYPE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ArquivoValidatorTest {
 
@@ -70,6 +73,23 @@ class ArquivoValidatorTest {
         ArquivoValidado validado = validator.validar(arquivo);
 
         assertThat(validado.nomeOriginal()).isEqualTo("relatorio.pdf");
+    }
+
+    @Test
+    void deveRejeitarPngAcimaDeDezMibAntesDoStreaming() throws Exception {
+        org.springframework.web.multipart.MultipartFile arquivo =
+                mock(org.springframework.web.multipart.MultipartFile.class);
+        when(arquivo.getOriginalFilename()).thenReturn("assinatura.png");
+        when(arquivo.getContentType()).thenReturn("image/png");
+        when(arquivo.getSize()).thenReturn(10L * 1024 * 1024 + 1);
+        when(arquivo.getInputStream()).thenReturn(new ByteArrayInputStream(
+                new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+        ));
+
+        assertThatThrownBy(() -> validator.validar(arquivo))
+                .isInstanceOfSatisfying(ArquivoInvalidoException.class,
+                        exception -> assertThat(exception.getReason())
+                                .isEqualTo(ArquivoInvalidoException.Reason.SIZE_LIMIT_EXCEEDED));
     }
 
     private static Stream<org.junit.jupiter.params.provider.Arguments> arquivosValidos() {

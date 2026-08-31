@@ -6,6 +6,7 @@ import com.example.efficientia.documento.domain.ModalidadeAssinatura;
 import com.example.efficientia.documento.domain.OrigemDocumento;
 import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.exception.DocumentoInvalidoException;
+import com.example.efficientia.documento.exception.RegraDocumentoException;
 import org.springframework.stereotype.Component;
 
 import java.text.Normalizer;
@@ -80,6 +81,6 @@ public class AssinaturaValidator {
     }
 
     private DocumentoInvalidoException invalida(String message) {
-        return new DocumentoInvalidoException(message);
+        return new RegraDocumentoException(message);
     }
 }
