@@ -1,14 +1,18 @@
 package com.example.efficientia.documento.service;
 
 import com.example.efficientia.documento.api.DocumentoMapper;
+import com.example.efficientia.documento.api.AssinaturaTextoRequest;
 import com.example.efficientia.documento.api.DocumentoMetadataRequest;
 import com.example.efficientia.documento.domain.OrigemDocumento;
+import com.example.efficientia.documento.domain.ModalidadeAssinatura;
+import com.example.efficientia.documento.domain.PapelAssinante;
 import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.persistence.DocumentoEntity;
 import com.example.efficientia.documento.persistence.DocumentoRepository;
 import com.example.efficientia.documento.storage.ArquivoArmazenado;
 import com.example.efficientia.documento.storage.StorageService;
 import com.example.efficientia.documento.validation.ArquivoValidator;
+import com.example.efficientia.documento.validation.AssinaturaValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -40,7 +44,13 @@ class DocumentoServiceTest {
     void setUp() {
         repository = mock(DocumentoRepository.class);
         storage = mock(StorageService.class);
-        service = new DocumentoService(repository, storage, new ArquivoValidator(), new DocumentoMapper());
+        service = new DocumentoService(
+                repository,
+                storage,
+                new ArquivoValidator(),
+                new AssinaturaValidator(),
+                new DocumentoMapper()
+        );
     }
 
     @Test
@@ -91,6 +101,36 @@ class DocumentoServiceTest {
         verify(storage).remover("documentos/orfao.pdf");
     }
 
+    @Test
+    void devePersistirAssinaturaTextualNormalizadaSemStorage() {
+        UUID idempotencyKey = UUID.randomUUID();
+        when(repository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(DocumentoEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.criarAssinaturaTextual(requestTexto("  Joa\u0303o da Silva  "), idempotencyKey);
+
+        ArgumentCaptor<DocumentoEntity> captor = ArgumentCaptor.forClass(DocumentoEntity.class);
+        verify(repository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getTextoAssinatura()).isEqualTo("João da Silva");
+        assertThat(response.textoAssinatura()).isEqualTo("João da Silva");
+        assertThat(response.conteudoUrl()).isNull();
+        verifyNoInteractions(storage);
+    }
+
+    @Test
+    void deveRejeitarHtmlSemChamarStorageOuRepositorySave() {
+        UUID idempotencyKey = UUID.randomUUID();
+        when(repository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.criarAssinaturaTextual(
+                requestTexto("<script>alert(1)</script>"),
+                idempotencyKey
+        )).isInstanceOf(com.example.efficientia.documento.exception.DocumentoInvalidoException.class);
+
+        verifyNoInteractions(storage);
+        verify(repository, never()).saveAndFlush(any());
+    }
+
     private DocumentoMetadataRequest requestRelatorio() {
         return new DocumentoMetadataRequest(
                 1,
@@ -100,6 +140,19 @@ class DocumentoServiceTest {
                 null,
                 null,
                 "Relatório final"
+        );
+    }
+
+    private AssinaturaTextoRequest requestTexto(String texto) {
+        return new AssinaturaTextoRequest(
+                1,
+                TipoDocumento.ASSINATURA,
+                OrigemDocumento.TEXTO,
+                2,
+                PapelAssinante.MOTORISTA,
+                ModalidadeAssinatura.TEXTO,
+                texto,
+                "Assinatura acessível"
         );
     }
 

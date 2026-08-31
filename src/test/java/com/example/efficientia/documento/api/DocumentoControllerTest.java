@@ -2,6 +2,8 @@ package com.example.efficientia.documento.api;
 
 import com.example.efficientia.cadastrobase.api.CadastroBaseExceptionHandler;
 import com.example.efficientia.documento.domain.OrigemDocumento;
+import com.example.efficientia.documento.domain.ModalidadeAssinatura;
+import com.example.efficientia.documento.domain.PapelAssinante;
 import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.service.DocumentoService;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,8 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,6 +74,31 @@ class DocumentoControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void deveCriarAssinaturaTextualSemConteudoUrl() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.criarAssinaturaTextual(any(), any())).thenReturn(responseTexto(id));
+
+        mockMvc.perform(post("/api/v1/documentos")
+                        .contentType(APPLICATION_JSON)
+                        .header("Idempotency-Key", UUID.randomUUID())
+                        .content(jsonAssinatura("João da Silva")))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/v1/documentos/" + id))
+                .andExpect(jsonPath("$.textoAssinatura").value("João da Silva"))
+                .andExpect(jsonPath("$.conteudoUrl").isEmpty())
+                .andExpect(jsonPath("$.storageKey").doesNotExist());
+    }
+
+    @Test
+    void deveRejeitarAssinaturaTextualVaziaNoContrato() throws Exception {
+        mockMvc.perform(post("/api/v1/documentos")
+                        .contentType(APPLICATION_JSON)
+                        .header("Idempotency-Key", UUID.randomUUID())
+                        .content(jsonAssinatura("   ")))
+                .andExpect(status().isBadRequest());
+    }
+
     private MockMultipartFile metadadosValidos() {
         return new MockMultipartFile(
                 "metadados",
@@ -117,6 +146,45 @@ class DocumentoControllerTest {
                 0L,
                 "/api/v1/documentos/" + id + "/conteudo"
         );
+    }
+
+    private DocumentoResponse responseTexto(UUID id) {
+        Instant agora = Instant.parse("2026-08-31T12:00:00Z");
+        return new DocumentoResponse(
+                id,
+                1,
+                TipoDocumento.ASSINATURA,
+                OrigemDocumento.TEXTO,
+                2,
+                PapelAssinante.MOTORISTA,
+                ModalidadeAssinatura.TEXTO,
+                "João da Silva",
+                "Assinatura acessível",
+                null,
+                null,
+                null,
+                null,
+                null,
+                agora,
+                agora,
+                0L,
+                null
+        );
+    }
+
+    private String jsonAssinatura(String texto) {
+        return """
+                {
+                  "viagemId": 1,
+                  "tipoDocumento": "ASSINATURA",
+                  "origem": "TEXTO",
+                  "assinanteId": 2,
+                  "papelAssinante": "MOTORISTA",
+                  "modalidadeAssinatura": "TEXTO",
+                  "textoAssinatura": "%s",
+                  "descricao": "Assinatura acessível"
+                }
+                """.formatted(texto);
     }
 
     @TestConfiguration(proxyBeanMethods = false)

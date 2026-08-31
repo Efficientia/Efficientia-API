@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +32,17 @@ public class DocumentoController {
             @RequestHeader("Idempotency-Key") UUID idempotencyKey
     ) {
         DocumentoResponse response = service.criarComArquivo(metadados, arquivo, idempotencyKey);
+        return ResponseEntity
+                .created(URI.create("/api/v1/documentos/" + response.id()))
+                .body(response);
+    }
+
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<DocumentoResponse> criarAssinaturaTextual(
+            @Valid @RequestBody AssinaturaTextoRequest request,
+            @RequestHeader("Idempotency-Key") UUID idempotencyKey
+    ) {
+        DocumentoResponse response = service.criarAssinaturaTextual(request, idempotencyKey);
         return ResponseEntity
                 .created(URI.create("/api/v1/documentos/" + response.id()))
                 .body(response);
