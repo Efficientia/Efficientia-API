@@ -24,6 +24,8 @@ import com.example.efficientia.documento.storage.StoredDocument;
 import com.example.efficientia.documento.validation.ArquivoValidado;
 import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
+import com.example.efficientia.security.DocumentoAccessContext;
+import com.example.efficientia.security.DocumentoAccessPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -49,6 +51,7 @@ public class DocumentoService {
     private final DocumentoCursorCodec cursorCodec;
     private final DocumentoMapper mapper;
     private final DocumentoAuditRepository auditRepository;
+    private final DocumentoAccessPolicy accessPolicy;
 
     public DocumentoService(
             DocumentoRepository repository,
@@ -57,7 +60,8 @@ public class DocumentoService {
             AssinaturaValidator assinaturaValidator,
             DocumentoCursorCodec cursorCodec,
             DocumentoMapper mapper,
-            DocumentoAuditRepository auditRepository
+            DocumentoAuditRepository auditRepository,
+            DocumentoAccessPolicy accessPolicy
     ) {
         this.repository = repository;
         this.storage = storage;
@@ -66,6 +70,7 @@ public class DocumentoService {
         this.cursorCodec = cursorCodec;
         this.mapper = mapper;
         this.auditRepository = auditRepository;
+        this.accessPolicy = accessPolicy;
     }
 
     @Transactional
@@ -75,9 +80,10 @@ public class DocumentoService {
             UUID idempotencyKey
     ) {
         validarComando(request, idempotencyKey);
+        accessPolicy.verificarViagem(request.viagemId());
 
         return repository.findByIdempotencyKey(idempotencyKey)
-                .map(mapper::paraResponse)
+                .map(this::mapearDocumentoAutorizado)
                 .orElseGet(() -> criarNovoComArquivo(request, arquivo, idempotencyKey));
     }
 
@@ -87,14 +93,18 @@ public class DocumentoService {
             UUID idempotencyKey
     ) {
         validarIdempotencyKey(idempotencyKey);
+        if (request != null) {
+            accessPolicy.verificarViagem(request.viagemId());
+        }
         return repository.findByIdempotencyKey(idempotencyKey)
-                .map(mapper::paraResponse)
+                .map(this::mapearDocumentoAutorizado)
                 .orElseGet(() -> criarNovaAssinaturaTextual(request, idempotencyKey));
     }
 
     @Transactional(readOnly = true)
     public PaginaDocumentosResponse listar(DocumentoListagemRequest request) {
         validarListagem(request);
+        DocumentoAccessContext contexto = accessPolicy.contextoAtual();
         DocumentoFiltro filtro = new DocumentoFiltro(
                 request.viagemId(),
                 request.assinanteId(),
@@ -102,7 +112,9 @@ public class DocumentoService {
                 request.origem(),
                 request.modalidadeAssinatura(),
                 request.criadoDe(),
-                request.criadoAte()
+                request.criadoAte(),
+                contexto.usuarioId(),
+                contexto.scope()
         );
 
         if (request.cursor() != null) {
@@ -116,9 +128,10 @@ public class DocumentoService {
         if (id == null) {
             throw new DocumentoInvalidoException("O identificador do documento é obrigatório.");
         }
-        return repository.findById(id)
-                .map(mapper::paraResponse)
+        DocumentoEntity documento = repository.findById(id)
                 .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        accessPolicy.verificarDocumento(documento);
+        return mapper.paraResponse(documento);
     }
 
     @Transactional(readOnly = true)
@@ -129,6 +142,7 @@ public class DocumentoService {
 
         DocumentoEntity documento = repository.findById(id)
                 .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        accessPolicy.verificarDocumento(documento);
         if (!documento.temArquivo()) {
             throw new DocumentoSemConteudoException(id);
         }
@@ -150,6 +164,7 @@ public class DocumentoService {
 
         DocumentoEntity documento = repository.findById(id)
                 .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        accessPolicy.verificarDocumento(documento);
         if (!request.versao().equals(documento.getVersao())) {
             throw new DocumentoConcorrenteException(id);
         }
@@ -173,6 +188,7 @@ public class DocumentoService {
 
         DocumentoEntity documento = repository.findById(id)
                 .orElseThrow(() -> new DocumentoNaoEncontradoException(id));
+        accessPolicy.verificarDocumento(documento);
         String storageKey = documento.getStorageKey();
 
         auditar(documento, DocumentoAuditOperation.EXCLUSAO,
@@ -249,6 +265,7 @@ public class DocumentoService {
         entity.setTextoAssinatura(texto);
         entity.setDescricao(request.descricao());
         entity.setIdempotencyKey(idempotencyKey);
+        accessPolicy.usuarioAtualId().ifPresent(entity::setCriadoPor);
         return mapper.paraResponse(repository.saveAndFlush(entity));
     }
 
@@ -273,6 +290,7 @@ public class DocumentoService {
         entity.setSha256(arquivo.sha256());
         entity.setStorageKey(arquivo.storageKey());
         entity.setIdempotencyKey(idempotencyKey);
+        accessPolicy.usuarioAtualId().ifPresent(entity::setCriadoPor);
         return entity;
     }
 
@@ -300,9 +318,14 @@ public class DocumentoService {
         DocumentoAuditEntity evento = new DocumentoAuditEntity();
         evento.setDocumentoId(documento.getId());
         evento.setOperacao(operacao);
-        evento.setUsuarioId(documento.getCriadoPor());
+        evento.setUsuarioId(accessPolicy.usuarioAtualId().orElse(documento.getCriadoPor()));
         evento.setDetalhes(detalhes);
         auditRepository.save(evento);
+    }
+
+    private DocumentoResponse mapearDocumentoAutorizado(DocumentoEntity documento) {
+        accessPolicy.verificarDocumento(documento);
+        return mapper.paraResponse(documento);
     }
 
     private void removerStorageAposCommit(String storageKey) {

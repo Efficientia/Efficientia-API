@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.MediaType;
 import org.springframework.http.CacheControl;
@@ -39,6 +40,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 @RestController
 @RequestMapping("/api/v1/documentos")
 @Tag(name = "Documentos", description = "Upload, assinaturas, consulta e ciclo de vida de documentos")
+@SecurityRequirement(name = "bearerAuth")
 public class DocumentoController {
 
     private final DocumentoService service;

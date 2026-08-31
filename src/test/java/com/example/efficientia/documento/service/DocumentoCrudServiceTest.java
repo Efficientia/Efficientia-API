@@ -12,6 +12,8 @@ import com.example.efficientia.documento.persistence.DocumentoRepository;
 import com.example.efficientia.documento.storage.StorageService;
 import com.example.efficientia.documento.validation.ArquivoValidator;
 import com.example.efficientia.documento.validation.AssinaturaValidator;
+import com.example.efficientia.security.DocumentoAccessPolicy;
+import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -34,7 +36,8 @@ class DocumentoCrudServiceTest {
     private final DocumentoAuditRepository auditRepository = mock(DocumentoAuditRepository.class);
     private final DocumentoService service = new DocumentoService(
             repository, storage, mock(ArquivoValidator.class), mock(AssinaturaValidator.class),
-            mock(DocumentoCursorCodec.class), mapper, auditRepository
+            mock(DocumentoCursorCodec.class), mapper, auditRepository,
+            new DocumentoAccessPolicy(mock(RelatorioViagemRepository.class))
     );
 
     @Test

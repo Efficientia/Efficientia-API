@@ -3,6 +3,7 @@ package com.example.efficientia.documento.persistence;
 import com.example.efficientia.documento.domain.DocumentoCursor;
 import com.example.efficientia.documento.domain.OrigemDocumento;
 import com.example.efficientia.documento.domain.TipoDocumento;
+import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemEntity;
 import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -203,7 +204,10 @@ class DocumentoRepositoryTest {
         LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource dataSource) {
             var factory = new LocalContainerEntityManagerFactoryBean();
             factory.setDataSource(dataSource);
-            factory.setPackagesToScan(DocumentoEntity.class.getPackageName());
+            factory.setPackagesToScan(
+                    DocumentoEntity.class.getPackageName(),
+                    RelatorioViagemEntity.class.getPackageName()
+            );
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of(
                     "hibernate.hbm2ddl.auto", "create-drop",
