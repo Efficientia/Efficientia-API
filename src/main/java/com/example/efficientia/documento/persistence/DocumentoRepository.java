@@ -13,7 +13,9 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface DocumentoRepository extends JpaRepository<DocumentoEntity, UUID> {
+public interface DocumentoRepository extends
+        JpaRepository<DocumentoEntity, UUID>,
+        DocumentoQueryRepository {
 
     Optional<DocumentoEntity> findByIdempotencyKey(UUID idempotencyKey);
 

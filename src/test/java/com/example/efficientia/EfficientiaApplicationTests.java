@@ -5,6 +5,7 @@ import com.example.efficientia.cadastrobase.persistence.FazendaRepository;
 import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCarretaRepository;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCavaloRepository;
+import com.example.efficientia.documento.persistence.DocumentoRepository;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -29,6 +30,11 @@ class EfficientiaApplicationTests {
 		@Bean
 		RelatorioViagemRepository relatorioViagemRepository() {
 			return Mockito.mock(RelatorioViagemRepository.class);
+		}
+
+		@Bean
+		DocumentoRepository documentoRepository() {
+			return Mockito.mock(DocumentoRepository.class);
 		}
 
 		@Bean

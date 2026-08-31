@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
@@ -107,6 +108,66 @@ class DocumentoRepositoryTest {
         assertThat(proximaPagina.getContent()).hasSize(1);
         assertThat(proximaPagina.getContent().get(0).getCriadoEm())
                 .isAfter(ultimo.getCriadoEm());
+    }
+
+    @Test
+    void deveAplicarFiltrosNaPaginacao() {
+        repository.save(novoDocumentoArquivo(UUID.randomUUID(), Instant.parse("2026-08-25T12:00:00Z"), 1));
+        repository.save(novoDocumentoArquivo(UUID.randomUUID(), Instant.parse("2026-08-25T12:01:00Z"), 2));
+        repository.flush();
+
+        var filtro = new DocumentoFiltro(
+                1,
+                null,
+                TipoDocumento.RELATORIO_VIAGEM,
+                OrigemDocumento.UPLOAD,
+                null,
+                null,
+                null
+        );
+        var pagina = repository.buscarPagina(
+                filtro,
+                PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "criadoEm"))
+        );
+
+        assertThat(pagina.getTotalElements()).isEqualTo(1);
+        assertThat(pagina.getContent()).extracting(DocumentoEntity::getViagemId).containsExactly(1);
+    }
+
+    @Test
+    void deveUsarIdComoDesempateNoCursor() {
+        Instant instante = Instant.parse("2026-08-25T12:00:00Z");
+        DocumentoEntity primeiro = novoDocumentoArquivo(UUID.randomUUID(), instante, 1);
+        primeiro.setId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        DocumentoEntity segundo = novoDocumentoArquivo(UUID.randomUUID(), instante, 1);
+        segundo.setId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+        DocumentoEntity terceiro = novoDocumentoArquivo(UUID.randomUUID(), instante, 1);
+        terceiro.setId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
+        repository.saveAllAndFlush(java.util.List.of(terceiro, primeiro, segundo));
+
+        DocumentoFiltro semFiltros = new DocumentoFiltro(null, null, null, null, null, null, null);
+        var pagina = repository.buscarCursor(
+                semFiltros,
+                new DocumentoCursor(instante, primeiro.getId()),
+                10
+        );
+
+        assertThat(pagina.getContent())
+                .extracting(DocumentoEntity::getId)
+                .containsExactly(segundo.getId(), terceiro.getId());
+    }
+
+    @Test
+    void deveAplicarFiltroTambemNoModoCursor() {
+        repository.save(novoDocumentoArquivo(UUID.randomUUID(), Instant.parse("2026-08-25T12:00:00Z"), 1));
+        repository.save(novoDocumentoArquivo(UUID.randomUUID(), Instant.parse("2026-08-25T12:01:00Z"), 2));
+        repository.flush();
+
+        DocumentoFiltro filtro = new DocumentoFiltro(2, null, null, null, null, null, null);
+        var pagina = repository.buscarCursor(filtro, null, 20);
+
+        assertThat(pagina.getContent()).hasSize(1);
+        assertThat(pagina.getContent().get(0).getViagemId()).isEqualTo(2);
     }
 
     private DocumentoEntity novoDocumentoArquivo(UUID idempotencyKey, Instant criadoEm, int viagemId) {
