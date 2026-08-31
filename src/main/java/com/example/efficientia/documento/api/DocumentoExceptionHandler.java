@@ -2,6 +2,7 @@ package com.example.efficientia.documento.api;
 
 import com.example.efficientia.documento.exception.ArquivoInvalidoException;
 import com.example.efficientia.documento.exception.DocumentoInvalidoException;
+import com.example.efficientia.documento.exception.DocumentoNaoEncontradoException;
 import com.example.efficientia.documento.storage.StorageException;
 import com.example.efficientia.documento.storage.StorageValidationException;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,11 @@ import java.net.URI;
 
 @RestControllerAdvice(assignableTypes = DocumentoController.class)
 public class DocumentoExceptionHandler {
+
+    @ExceptionHandler(DocumentoNaoEncontradoException.class)
+    public ProblemDetail documentoNaoEncontrado(DocumentoNaoEncontradoException exception) {
+        return problem(HttpStatus.NOT_FOUND, "Documento não encontrado", exception.getMessage());
+    }
 
     @ExceptionHandler(DocumentoInvalidoException.class)
     public ProblemDetail documentoInvalido(DocumentoInvalidoException exception) {

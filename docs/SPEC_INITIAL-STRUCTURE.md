@@ -556,8 +556,8 @@ Filtros permitidos:
 
 | Campo | Tipo | Regra |
 | --- | --- | --- |
-| `viagemId` | UUID | Opcional |
-| `assinanteId` | UUID | Opcional |
+| `viagemId` | integer | Opcional |
+| `assinanteId` | integer | Opcional |
 | `tipoDocumento` | enum | Opcional |
 | `origem` | enum | Opcional |
 | `modalidadeAssinatura` | enum | Opcional; somente assinaturas |

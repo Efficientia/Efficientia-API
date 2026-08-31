@@ -18,11 +18,13 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
 import java.util.UUID;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -97,6 +99,40 @@ class DocumentoControllerTest {
                         .header("Idempotency-Key", UUID.randomUUID())
                         .content(jsonAssinatura("   ")))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void deveListarDocumentosComContratoDePagina() throws Exception {
+        when(service.listar(any())).thenReturn(new PaginaDocumentosResponse(
+                List.of(),
+                0,
+                20,
+                0L,
+                0,
+                null,
+                false
+        ));
+
+        mockMvc.perform(get("/api/v1/documentos")
+                        .param("page", "0")
+                        .param("size", "20")
+                        .param("viagemId", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.itens").isArray())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.totalElementos").value(0));
+    }
+
+    @Test
+    void deveRetornar404NaConsultaDeDocumentoInexistente() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.buscar(id)).thenThrow(
+                new com.example.efficientia.documento.exception.DocumentoNaoEncontradoException(id)
+        );
+
+        mockMvc.perform(get("/api/v1/documentos/{id}", id))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Documento não encontrado"));
     }
 
     private MockMultipartFile metadadosValidos() {
