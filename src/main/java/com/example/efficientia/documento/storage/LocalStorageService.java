@@ -32,9 +32,11 @@ public class LocalStorageService implements StorageService {
     private static final int BUFFER_SIZE = 8 * 1024;
     private static final String PDF_MIME_TYPE = "application/pdf";
     private static final String PNG_MIME_TYPE = "image/png";
+    private static final String ZIP_MIME_TYPE = "application/zip";
+    private static final long MAX_ZIP_BYTES = 550L * 1024 * 1024;
     private static final Pattern STORAGE_KEY = Pattern.compile(
-            "documentos/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/"
-                    + "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(pdf|png)"
+            "(documentos|exportacoes)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/"
+                    + "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(pdf|png|zip)"
     );
 
     private final Path configuredRoot;
@@ -49,7 +51,7 @@ public class LocalStorageService implements StorageService {
 
     @Override
     public ArquivoArmazenado salvar(
-            UUID documentoId,
+            UUID referenciaId,
             String nomeOriginal,
             String mimeType,
             InputStream conteudo
@@ -60,22 +62,24 @@ public class LocalStorageService implements StorageService {
 
         Path temporario = null;
         try (InputStream input = conteudo) {
-            validarEntrada(documentoId, nomeOriginal);
+            validarEntrada(referenciaId, nomeOriginal);
             MediaDefinition media = mediaDefinition(mimeType);
             Path root = prepararRaiz();
-            Path documentos = criarSubdiretorioSeguro(root, root, "documentos");
-            Path diretorioDocumento = criarSubdiretorioSeguro(
+            
+            String tipoEntidade = ZIP_MIME_TYPE.equals(mimeType) ? "exportacoes" : "documentos";
+            Path diretorioBase = criarSubdiretorioSeguro(root, root, tipoEntidade);
+            Path diretorioReferencia = criarSubdiretorioSeguro(
                     root,
-                    documentos,
-                    documentoId.toString()
+                    diretorioBase,
+                    referenciaId.toString()
             );
 
             String nomeInterno = UUID.randomUUID() + "." + media.extension();
-            String storageKey = "documentos/" + documentoId + "/" + nomeInterno;
-            Path destino = diretorioDocumento.resolve(nomeInterno).normalize();
+            String storageKey = tipoEntidade + "/" + referenciaId + "/" + nomeInterno;
+            Path destino = diretorioReferencia.resolve(nomeInterno).normalize();
             garantirSobRaiz(root, destino);
 
-            temporario = Files.createTempFile(diretorioDocumento, ".upload-", ".tmp");
+            temporario = Files.createTempFile(diretorioReferencia, ".upload-", ".tmp");
             CopyResult result = copiarComHash(input, temporario, media.maxBytes());
             if (result.tamanhoBytes() == 0) {
                 throw new StorageValidationException(EMPTY_FILE, "O arquivo não pode estar vazio.");
@@ -128,9 +132,9 @@ public class LocalStorageService implements StorageService {
         }
     }
 
-    private void validarEntrada(UUID documentoId, String nomeOriginal) {
-        if (documentoId == null) {
-            throw new StorageValidationException(INVALID_INPUT, "documentoId é obrigatório.");
+    private void validarEntrada(UUID referenciaId, String nomeOriginal) {
+        if (referenciaId == null) {
+            throw new StorageValidationException(INVALID_INPUT, "referenciaId é obrigatório.");
         }
         if (nomeOriginal == null || nomeOriginal.isBlank()) {
             throw new StorageValidationException(INVALID_INPUT, "nomeOriginal é obrigatório.");
@@ -144,9 +148,12 @@ public class LocalStorageService implements StorageService {
         if (PNG_MIME_TYPE.equals(mimeType)) {
             return new MediaDefinition(PNG_MIME_TYPE, "png", maxPngBytes);
         }
+        if (ZIP_MIME_TYPE.equals(mimeType)) {
+            return new MediaDefinition(ZIP_MIME_TYPE, "zip", MAX_ZIP_BYTES);
+        }
         throw new StorageValidationException(
                 UNSUPPORTED_MEDIA_TYPE,
-                "O storage privado aceita somente application/pdf e image/png."
+                "O storage privado aceita somente application/pdf, image/png e application/zip."
         );
     }
 
@@ -286,7 +293,9 @@ public class LocalStorageService implements StorageService {
     }
 
     private String mimeTypeDaChave(String storageKey) {
-        return storageKey.endsWith(".pdf") ? PDF_MIME_TYPE : PNG_MIME_TYPE;
+        if (storageKey.endsWith(".pdf")) return PDF_MIME_TYPE;
+        if (storageKey.endsWith(".zip")) return ZIP_MIME_TYPE;
+        return PNG_MIME_TYPE;
     }
 
     private void removerTemporario(Path temporario) {

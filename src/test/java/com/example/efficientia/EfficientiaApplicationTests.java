@@ -87,6 +87,17 @@ class EfficientiaApplicationTests {
 		VeiculoCarretaRepository veiculoCarretaRepository() {
 			return Mockito.mock(VeiculoCarretaRepository.class);
 		}
+
+		@Bean
+		com.example.efficientia.exportacao.persistence.ExportacaoRepository exportacaoRepository() {
+			return Mockito.mock(com.example.efficientia.exportacao.persistence.ExportacaoRepository.class);
+		}
+
+		@Bean
+		@org.springframework.context.annotation.Primary
+		com.example.efficientia.documento.storage.StorageService storageService() {
+			return Mockito.mock(com.example.efficientia.documento.storage.StorageService.class);
+		}
 	}
 
 }

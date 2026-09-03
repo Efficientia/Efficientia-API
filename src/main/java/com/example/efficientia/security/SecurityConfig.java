@@ -45,8 +45,12 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/metrics/**", "/actuator/prometheus", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/exportacoes/**")
+                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/exportacoes/**")
+                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/documentos/**")
                         .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/documentos/**")
@@ -87,7 +91,12 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(properties.allowedOrigins());
         configuration.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Correlation-Id"));
-        configuration.setExposedHeaders(List.of("Location", "Content-Disposition", "X-Correlation-Id"));
+        configuration.setExposedHeaders(List.of(
+                "Location",
+                "Retry-After",
+                "Content-Disposition",
+                "X-Correlation-Id"
+        ));
         configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
 

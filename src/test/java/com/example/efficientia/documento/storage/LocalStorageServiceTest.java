@@ -34,23 +34,25 @@ class LocalStorageServiceTest {
     @ParameterizedTest
     @CsvSource({
             "application/pdf,pdf,%PDF-conteudo-de-teste",
-            "image/png,png,PNG-conteudo-de-teste"
+            "image/png,png,PNG-conteudo-de-teste",
+            "application/zip,zip,PK-conteudo-de-teste"
     })
     void deveSalvarAbrirERemoverPorStreaming(String mimeType, String extensao, String texto)
             throws IOException {
         LocalStorageService storage = novoStorage(tempDir.resolve("storage"), 1_024, 1_024);
         byte[] conteudo = texto.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        UUID documentoId = UUID.randomUUID();
+        UUID referenciaId = UUID.randomUUID();
 
         ArquivoArmazenado salvo = storage.salvar(
-                documentoId,
+                referenciaId,
                 "arquivo-original." + extensao,
                 mimeType,
                 new ByteArrayInputStream(conteudo)
         );
 
+        String prefix = mimeType.equals("application/zip") ? "exportacoes/" : "documentos/";
         assertThat(salvo.storageKey())
-                .matches("documentos/" + documentoId + "/[0-9a-f-]{36}\\." + extensao);
+                .matches(prefix + referenciaId + "/[0-9a-f-]{36}\\." + extensao);
         assertThat(salvo.tamanhoBytes()).isEqualTo(conteudo.length);
         assertThat(salvo.sha256()).isEqualTo(sha256(conteudo));
         assertThat(salvo.mimeType()).isEqualTo(mimeType);

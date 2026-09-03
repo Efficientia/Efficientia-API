@@ -8,6 +8,12 @@ import com.example.efficientia.documento.exception.DocumentoSemConteudoException
 import com.example.efficientia.documento.exception.RegraDocumentoException;
 import com.example.efficientia.documento.storage.StorageException;
 import com.example.efficientia.documento.storage.StorageValidationException;
+import com.example.efficientia.exportacao.api.ExportacaoController;
+import com.example.efficientia.exportacao.exception.ExportacaoConflitoException;
+import com.example.efficientia.exportacao.exception.ExportacaoInvalidaException;
+import com.example.efficientia.exportacao.exception.ExportacaoNaoEncontradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoExpiradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoNaoConcluidaException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -31,7 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@RestControllerAdvice(assignableTypes = DocumentoController.class)
+@RestControllerAdvice(assignableTypes = {DocumentoController.class, ExportacaoController.class})
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class DocumentoExceptionHandler {
 
@@ -93,6 +99,36 @@ public class DocumentoExceptionHandler {
     public ProblemDetail uploadMuitoGrande() {
         return problem(HttpStatus.PAYLOAD_TOO_LARGE, "ARQUIVO_MUITO_GRANDE",
                 "Arquivo muito grande", "A requisição excede o limite configurado para upload.");
+    }
+
+    @ExceptionHandler(ExportacaoInvalidaException.class)
+    public ProblemDetail exportacaoInvalida(ExportacaoInvalidaException exception) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "EXPORTACAO_INVALIDA",
+                "Exportação inválida", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoConflitoException.class)
+    public ProblemDetail exportacaoConflito(ExportacaoConflitoException exception) {
+        return problem(HttpStatus.CONFLICT, "EXPORTACAO_CONFLITO",
+                "Conflito de exportação", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoNaoEncontradaException.class)
+    public ProblemDetail exportacaoNaoEncontrada(ExportacaoNaoEncontradaException exception) {
+        return problem(HttpStatus.NOT_FOUND, "EXPORTACAO_NAO_ENCONTRADA",
+                "Exportação não encontrada", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoNaoConcluidaException.class)
+    public ProblemDetail exportacaoNaoConcluida(ExportacaoNaoConcluidaException exception) {
+        return problem(HttpStatus.CONFLICT, "EXPORTACAO_NAO_CONCLUIDA",
+                "Exportação não concluída", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoExpiradaException.class)
+    public ProblemDetail exportacaoExpirada(ExportacaoExpiradaException exception) {
+        return problem(HttpStatus.GONE, "EXPORTACAO_EXPIRADA",
+                "Exportação expirada", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
