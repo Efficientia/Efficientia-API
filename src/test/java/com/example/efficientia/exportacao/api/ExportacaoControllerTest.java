@@ -16,6 +16,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import com.example.efficientia.exportacao.exception.ExportacaoExpiradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoNaoConcluidaException;
+import com.example.efficientia.exportacao.service.ExportacaoConteudo;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.HttpHeaders;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -172,6 +177,46 @@ class ExportacaoControllerTest {
                 .andExpect(header().string("Content-Type", org.hamcrest.Matchers.containsString("application/problem+json")))
                 .andExpect(jsonPath("$.timestamp").exists())
                 .andExpect(jsonPath("$.correlationId").exists());
+    }
+
+    @Test
+    void deveBaixarConteudoDaExportacao() throws Exception {
+        UUID id = UUID.randomUUID();
+        ByteArrayResource resource = new ByteArrayResource("teste-zip".getBytes());
+        ExportacaoConteudo conteudo = new ExportacaoConteudo(
+                resource,
+                "application/zip",
+                9L,
+                "exportacao.zip"
+        );
+
+        when(service.baixarConteudo(id)).thenReturn(conteudo);
+
+        mockMvc.perform(get("/api/v1/exportacoes/{id}/conteudo", id))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, org.hamcrest.Matchers.startsWith("attachment; filename=\"exportacao.zip\"")))
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "application/zip"))
+                .andExpect(header().longValue(HttpHeaders.CONTENT_LENGTH, 9L));
+    }
+
+    @Test
+    void deveRetornar409SeExportacaoNaoConcluida() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.baixarConteudo(id)).thenThrow(new ExportacaoNaoConcluidaException("A exportação não está concluída."));
+
+        mockMvc.perform(get("/api/v1/exportacoes/{id}/conteudo", id))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EXPORTACAO_NAO_CONCLUIDA"));
+    }
+
+    @Test
+    void deveRetornar410SeExportacaoExpirada() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.baixarConteudo(id)).thenThrow(new ExportacaoExpiradaException("O arquivo de exportação expirou."));
+
+        mockMvc.perform(get("/api/v1/exportacoes/{id}/conteudo", id))
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.code").value("EXPORTACAO_EXPIRADA"));
     }
 
     private ExportacaoResponse response(UUID id) {

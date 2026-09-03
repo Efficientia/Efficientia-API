@@ -8,6 +8,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import java.nio.charset.StandardCharsets;
+import com.example.efficientia.exportacao.service.ExportacaoConteudo;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -66,5 +70,27 @@ public class ExportacaoController {
     })
     public ResponseEntity<ExportacaoResponse> buscar(@PathVariable UUID id) {
         return ResponseEntity.ok(service.buscar(id));
+    }
+
+    @GetMapping(path = "/{id}/conteudo")
+    @Operation(summary = "Transmite o arquivo ZIP da exportação")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Conteúdo transmitido por Resource"),
+            @ApiResponse(responseCode = "404", description = "Exportação não encontrada"),
+            @ApiResponse(responseCode = "409", description = "Exportação ainda não concluída"),
+            @ApiResponse(responseCode = "410", description = "Arquivo de exportação expirado")
+    })
+    public ResponseEntity<Resource> buscarConteudo(@PathVariable UUID id) {
+        ExportacaoConteudo conteudo = service.baixarConteudo(id);
+        ContentDisposition disposition = ContentDisposition
+                .builder("attachment")
+                .filename(conteudo.nomeArquivo(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentType(MediaType.parseMediaType(conteudo.mimeType()))
+                .contentLength(conteudo.tamanhoBytes())
+                .body(conteudo.resource());
     }
 }

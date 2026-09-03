@@ -48,7 +48,8 @@ class ExportacaoServiceTest {
         persistenceService = mock(ExportacaoPersistenceService.class);
         documentoRepository = mock(DocumentoRepository.class);
         accessPolicy = mock(DocumentoAccessPolicy.class);
-        service = new ExportacaoService(repository, persistenceService, documentoRepository, accessPolicy);
+        var storageService = mock(com.example.efficientia.documento.storage.StorageService.class);
+        service = new ExportacaoService(repository, persistenceService, documentoRepository, accessPolicy, storageService);
         when(accessPolicy.usuarioAtualId()).thenReturn(Optional.of(42));
         when(persistenceService.criar(any(ExportacaoEntity.class))).thenAnswer(invocation -> {
             ExportacaoEntity entity = invocation.getArgument(0);

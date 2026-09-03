@@ -10,7 +10,7 @@ public interface StorageService {
      * SHA-256 durante a mesma cópia usada para persistir o conteúdo.
      */
     ArquivoArmazenado salvar(
-            UUID documentoId,
+            UUID referenciaId,
             String nomeOriginal,
             String mimeType,
             InputStream conteudo

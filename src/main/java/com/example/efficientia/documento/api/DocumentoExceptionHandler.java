@@ -12,6 +12,8 @@ import com.example.efficientia.exportacao.api.ExportacaoController;
 import com.example.efficientia.exportacao.exception.ExportacaoConflitoException;
 import com.example.efficientia.exportacao.exception.ExportacaoInvalidaException;
 import com.example.efficientia.exportacao.exception.ExportacaoNaoEncontradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoExpiradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoNaoConcluidaException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -115,6 +117,18 @@ public class DocumentoExceptionHandler {
     public ProblemDetail exportacaoNaoEncontrada(ExportacaoNaoEncontradaException exception) {
         return problem(HttpStatus.NOT_FOUND, "EXPORTACAO_NAO_ENCONTRADA",
                 "Exportação não encontrada", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoNaoConcluidaException.class)
+    public ProblemDetail exportacaoNaoConcluida(ExportacaoNaoConcluidaException exception) {
+        return problem(HttpStatus.CONFLICT, "EXPORTACAO_NAO_CONCLUIDA",
+                "Exportação não concluída", exception.getMessage());
+    }
+
+    @ExceptionHandler(ExportacaoExpiradaException.class)
+    public ProblemDetail exportacaoExpirada(ExportacaoExpiradaException exception) {
+        return problem(HttpStatus.GONE, "EXPORTACAO_EXPIRADA",
+                "Exportação expirada", exception.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -10,6 +10,10 @@ import com.example.efficientia.exportacao.exception.ExportacaoInvalidaException;
 import com.example.efficientia.exportacao.exception.ExportacaoNaoEncontradaException;
 import com.example.efficientia.exportacao.persistence.ExportacaoEntity;
 import com.example.efficientia.exportacao.persistence.ExportacaoRepository;
+import com.example.efficientia.documento.storage.StorageService;
+import com.example.efficientia.documento.storage.StoredDocument;
+import com.example.efficientia.exportacao.exception.ExportacaoExpiradaException;
+import com.example.efficientia.exportacao.exception.ExportacaoNaoConcluidaException;
 import com.example.efficientia.security.DocumentoAccessPolicy;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -33,17 +37,20 @@ public class ExportacaoService {
     private final ExportacaoPersistenceService persistenceService;
     private final DocumentoRepository documentoRepository;
     private final DocumentoAccessPolicy accessPolicy;
+    private final StorageService storageService;
 
     public ExportacaoService(
             ExportacaoRepository repository,
             ExportacaoPersistenceService persistenceService,
             DocumentoRepository documentoRepository,
-            DocumentoAccessPolicy accessPolicy
+            DocumentoAccessPolicy accessPolicy,
+            StorageService storageService
     ) {
         this.repository = repository;
         this.persistenceService = persistenceService;
         this.documentoRepository = documentoRepository;
         this.accessPolicy = accessPolicy;
+        this.storageService = storageService;
     }
 
     @Transactional
@@ -82,6 +89,32 @@ public class ExportacaoService {
                 .orElseThrow(() -> new ExportacaoNaoEncontradaException(id));
         verificarProprietario(exportacao);
         return paraResponse(exportacao);
+    }
+
+    @Transactional(readOnly = true)
+    public ExportacaoConteudo baixarConteudo(UUID id) {
+        if (id == null) {
+            throw new ExportacaoInvalidaException("O identificador da exportação é obrigatório.");
+        }
+
+        ExportacaoEntity exportacao = repository.findById(id)
+                .orElseThrow(() -> new ExportacaoNaoEncontradaException(id));
+        verificarProprietario(exportacao);
+
+        if (exportacao.getEstado() == EstadoExportacao.EXPIRADA) {
+            throw new ExportacaoExpiradaException("O arquivo de exportação expirou e não está mais disponível.");
+        }
+        if (exportacao.getEstado() != EstadoExportacao.CONCLUIDA) {
+            throw new ExportacaoNaoConcluidaException("A exportação não está concluída. Estado atual: " + exportacao.getEstado());
+        }
+
+        StoredDocument stored = storageService.abrir(exportacao.getStorageKey());
+        return new ExportacaoConteudo(
+                stored.conteudo(),
+                stored.mimeType(),
+                stored.tamanhoBytes(),
+                exportacao.getNomeArquivo()
+        );
     }
 
     private List<UUID> validarComando(SolicitarExportacaoRequest request, UUID idempotencyKey) {
