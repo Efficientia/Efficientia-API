@@ -20,6 +20,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.Optional;
@@ -36,15 +37,26 @@ public class ExportacaoWorker {
     private final ExportacaoRepository exportacaoRepository;
     private final DocumentoRepository documentoRepository;
     private final StorageService storageService;
+    private final com.example.efficientia.metrics.EfficientiaMetricsService metricsService;
 
     public ExportacaoWorker(
             ExportacaoRepository exportacaoRepository,
             DocumentoRepository documentoRepository,
             StorageService storageService
     ) {
+        this(exportacaoRepository, documentoRepository, storageService, null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public ExportacaoWorker(
+            ExportacaoRepository exportacaoRepository,
+            DocumentoRepository documentoRepository,
+            StorageService storageService,
+            com.example.efficientia.metrics.EfficientiaMetricsService metricsService
+    ) {
         this.exportacaoRepository = exportacaoRepository;
         this.documentoRepository = documentoRepository;
         this.storageService = storageService;
+        this.metricsService = metricsService;
     }
 
     @Scheduled(fixedDelay = 5000)
@@ -116,12 +128,26 @@ public class ExportacaoWorker {
             exportacao.setNomeArquivo(armazenado.nomeOriginal());
             
             exportacaoRepository.save(exportacao);
-
+            if (metricsService != null) {
+                metricsService.registrarExportacaoConcluida();
+                if (exportacao.getIniciadoEm() != null) {
+                    metricsService.registrarTempoProcessamento(
+                            Duration.between(exportacao.getIniciadoEm(), exportacao.getConcluidoEm()).toMillis()
+                    );
+                }
+            }
         } catch (Exception e) {
             log.error("Falha ao processar exportação {}", exportacao.getId(), e);
-            exportacao.setEstado(EstadoExportacao.FALHA);
-            exportacao.setErroCodigo("ERRO_PROCESSAMENTO");
-            exportacaoRepository.save(exportacao);
+            try {
+                exportacao.setEstado(EstadoExportacao.FALHA);
+                exportacao.setErroCodigo("ERRO_PROCESSAMENTO_ZIP");
+                exportacaoRepository.save(exportacao);
+                if (metricsService != null) {
+                    metricsService.registrarExportacaoFalha();
+                }
+            } catch (Exception ex) {
+                log.error("Erro ao salvar estado FALHA da exportação {}", exportacao.getId(), ex);
+            }
         } finally {
             if (tempFile != null) {
                 try {

@@ -156,6 +156,6 @@ class ExportacaoWorkerTest {
 
         ExportacaoEntity finalSave = captor.getAllValues().get(1);
         assertThat(finalSave.getEstado()).isEqualTo(EstadoExportacao.FALHA);
-        assertThat(finalSave.getErroCodigo()).isEqualTo("ERRO_PROCESSAMENTO");
+        assertThat(finalSave.getErroCodigo()).isEqualTo("ERRO_PROCESSAMENTO_ZIP");
     }
 }

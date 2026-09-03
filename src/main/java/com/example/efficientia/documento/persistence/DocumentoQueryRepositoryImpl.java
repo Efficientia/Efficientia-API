@@ -35,7 +35,7 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<DocumentoEntity> criteria = builder.createQuery(DocumentoEntity.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
-        criteria.select(root).where(predicados(builder, criteria, root, filtro, null).toArray(Predicate[]::new));
+        criteria.select(root).where(predicados(builder, criteria, root, filtro, null, false).toArray(Predicate[]::new));
         criteria.orderBy(ordenacao(builder, root, pageable.getSort()));
 
         TypedQuery<DocumentoEntity> query = entityManager.createQuery(criteria);
@@ -55,7 +55,7 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaBuilder builder = entityManager.getCriteriaBuilder();
         CriteriaQuery<DocumentoEntity> criteria = builder.createQuery(DocumentoEntity.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
-        criteria.select(root).where(predicados(builder, criteria, root, filtro, cursor).toArray(Predicate[]::new));
+        criteria.select(root).where(predicados(builder, criteria, root, filtro, cursor, true).toArray(Predicate[]::new));
         criteria.orderBy(builder.asc(root.get("criadoEm")), builder.asc(root.get("id")));
 
         List<DocumentoEntity> encontrados = entityManager.createQuery(criteria)
@@ -78,7 +78,7 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         CriteriaQuery<Long> criteria = builder.createQuery(Long.class);
         Root<DocumentoEntity> root = criteria.from(DocumentoEntity.class);
         criteria.select(builder.count(root))
-                .where(predicados(builder, criteria, root, filtro, null).toArray(Predicate[]::new));
+                .where(predicados(builder, criteria, root, filtro, null, false).toArray(Predicate[]::new));
         return entityManager.createQuery(criteria).getSingleResult();
     }
 
@@ -87,7 +87,8 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
             CriteriaQuery<?> criteria,
             Root<DocumentoEntity> root,
             DocumentoFiltro filtro,
-            DocumentoCursor cursor
+            DocumentoCursor cursor,
+            boolean modoCursor
     ) {
         List<Predicate> predicates = new ArrayList<>();
         if (filtro.viagemId() != null) {
@@ -98,6 +99,8 @@ public class DocumentoQueryRepositoryImpl implements DocumentoQueryRepository {
         }
         if (filtro.tipoDocumento() != null) {
             predicates.add(builder.equal(root.get("tipoDocumento"), filtro.tipoDocumento()));
+        } else if (modoCursor) {
+            predicates.add(builder.notEqual(root.get("tipoDocumento"), com.example.efficientia.documento.domain.TipoDocumento.ASSINATURA));
         }
         if (filtro.origem() != null) {
             predicates.add(builder.equal(root.get("origem"), filtro.origem()));
