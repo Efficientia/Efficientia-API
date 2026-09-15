@@ -1,0 +1,23 @@
+# ==============================================================================
+# Caller CI - Backend API (Java Spring MVC & Postgres)
+# Repositório de Destino: backend-api (ou backend da aplicação)
+# Coloque em: .github/workflows/ci-call.yml no repositório do backend
+# ==============================================================================
+
+name: CI Call - Backend Java Spring
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+permissions:
+  contents: read
+
+jobs:
+  call-backend-ci:
+    name: Executar CI Java Centralizado
+    uses: Efficientia/.github/.github/workflows/ci-java-spring.yml@main
+    with:
+      java-version: '17'
