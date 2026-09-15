@@ -68,7 +68,7 @@ class AuthControllerTest {
     @Test
     void deveRetornar401QuandoCredenciaisForemInvalidas() throws Exception {
         when(authService.autenticar(any()))
-                .thenThrow(new AutenticacaoInvalidaException("Credenciais inválidas: senha incorreta."));
+                .thenThrow(new AutenticacaoInvalidaException("Credenciais inválidas."));
 
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -82,7 +82,7 @@ class AuthControllerTest {
                                 """))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Falha na autenticação"))
-                .andExpect(jsonPath("$.detail").value("Credenciais inválidas: senha incorreta."));
+                .andExpect(jsonPath("$.detail").value("Credenciais inválidas."));
     }
 
     @Test

@@ -9,12 +9,14 @@ public record SecurityProperties(
         boolean enabled,
         String issuer,
         String jwkSetUri,
+        String secret,
         String audience,
         List<String> allowedOrigins
 ) {
     public SecurityProperties {
-        issuer = issuer == null ? "" : issuer.strip();
+        issuer = issuer == null || issuer.isBlank() ? "efficientia-api" : issuer.strip();
         jwkSetUri = jwkSetUri == null ? "" : jwkSetUri.strip();
+        secret = secret == null || secret.isBlank() ? "efficientia-secret-key-must-be-at-least-32-bytes-long!" : secret.strip();
         audience = audience == null || audience.isBlank() ? "efficientia-api" : audience.strip();
         allowedOrigins = allowedOrigins == null || allowedOrigins.isEmpty()
                 ? List.of("http://localhost:5173", "http://localhost:3000")

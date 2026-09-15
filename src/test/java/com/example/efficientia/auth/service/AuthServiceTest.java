@@ -83,7 +83,7 @@ class AuthServiceTest {
                 () -> authService.autenticar(request)
         );
 
-        assertEquals("Credenciais inválidas: senha incorreta.", ex.getMessage());
+        assertEquals("Credenciais inválidas.", ex.getMessage());
     }
 
     @Test
@@ -103,7 +103,7 @@ class AuthServiceTest {
                 () -> authService.autenticar(request)
         );
 
-        assertEquals("Código da empresa incorreto.", ex.getMessage());
+        assertEquals("Credenciais inválidas.", ex.getMessage());
     }
 
     @Test
@@ -124,7 +124,7 @@ class AuthServiceTest {
                 () -> authService.autenticar(request)
         );
 
-        assertEquals("Usuário inativo no sistema.", ex.getMessage());
+        assertEquals("Credenciais inválidas.", ex.getMessage());
     }
 
     @Test

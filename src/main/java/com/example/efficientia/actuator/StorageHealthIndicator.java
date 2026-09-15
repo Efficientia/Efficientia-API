@@ -19,12 +19,6 @@ public class StorageHealthIndicator implements HealthIndicator {
 
     @Override
     public Health health() {
-        try {
-            if (!Files.exists(rootPath)) {
-                Files.createDirectories(rootPath);
-            }
-        } catch (Exception ignored) {
-        }
         if (!Files.exists(rootPath)) {
             return Health.down()
                     .withDetail("storagePath", rootPath.toString())

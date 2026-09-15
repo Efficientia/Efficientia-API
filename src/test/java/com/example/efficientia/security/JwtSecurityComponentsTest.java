@@ -41,6 +41,21 @@ class JwtSecurityComponentsTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("Deve converter todos os papéis válidos do sistema")
+    void deveConverterTodosOsPapeisValidosDoSistema() {
+        Jwt jwt = jwt(Map.of(
+                "sub", "10",
+                "roles", List.of("manobrista", "analista", "pecuarista", "curraleiro")
+        ), List.of("efficientia-api"));
+
+        JwtAuthenticationToken authentication = (JwtAuthenticationToken) new JwtRoleConverter().convert(jwt);
+
+        assertThat(authentication.getAuthorities())
+                .extracting(authority -> authority.getAuthority())
+                .containsExactlyInAnyOrder("ROLE_MANOBRISTA", "ROLE_ANALISTA", "ROLE_PECUARISTA", "ROLE_CURRALEIRO");
+    }
+
+    @Test
     void deveValidarAudience() {
         AudienceValidator validator = new AudienceValidator("efficientia-api");
 

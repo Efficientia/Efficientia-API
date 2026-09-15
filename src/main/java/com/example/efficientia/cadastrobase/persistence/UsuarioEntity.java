@@ -65,6 +65,7 @@ public class UsuarioEntity {
     public String getSenhaHash() { return senhaHash; }
     public Boolean getAtivo() { return ativo; }
 
+    public void setId(Integer id) { this.id = id; }
     public void setTipo(TipoUsuario tipo) { this.tipo = tipo; }
     public void setCpf(String cpf) { this.cpf = cpf; }
     public void setCodigoInterno(String codigoInterno) { this.codigoInterno = codigoInterno; }

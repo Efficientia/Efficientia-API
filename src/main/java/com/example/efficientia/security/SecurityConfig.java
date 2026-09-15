@@ -28,7 +28,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "false", matchIfMissing = true)
+    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "false")
     SecurityFilterChain localFilterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
@@ -38,27 +38,40 @@ public class SecurityConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true")
+    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
     SecurityFilterChain resourceServerFilterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/metrics/**", "/actuator/prometheus", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/api/v1/auth/**")
-                        .permitAll()
+                        .requestMatchers(
+                                "/actuator/health/**",
+                                "/actuator/info",
+                                "/actuator/metrics/**",
+                                "/actuator/prometheus",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/api/v1/status",
+                                "/api/v1/auth/**"
+                        ).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/exportacoes/**")
-                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/exportacoes/**")
-                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/v1/documentos/**")
-                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/documentos/**")
-                        .hasAnyRole("MOTORISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/documentos/**")
-                        .hasAnyRole("FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("ANALISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/documentos/**")
-                        .hasAnyRole("FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("ANALISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .requestMatchers("/api/v1/relatorios-viagem/**")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .requestMatchers("/api/v1/usuarios/**", "/api/v1/enderecos/**", "/api/v1/fazendas/**", "/api/v1/veiculos/**")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(new JwtRoleConverter())))
@@ -66,21 +79,30 @@ public class SecurityConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true")
+    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(JwtDecoder.class)
     JwtDecoder jwtDecoder(SecurityProperties properties) {
-        if (properties.jwkSetUri().isBlank()) {
-            throw new IllegalStateException(
-                    "JWT_JWK_SET_URI é obrigatório quando SECURITY_ENABLED=true."
-            );
+        NimbusJwtDecoder decoder;
+        if (!properties.jwkSetUri().isBlank()) {
+            decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();
+        } else {
+            byte[] secretBytes = properties.secret().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            if (secretBytes.length < 32) {
+                throw new IllegalStateException("JWT_SECRET deve possuir pelo menos 32 caracteres.");
+            }
+            javax.crypto.SecretKey secretKey = new javax.crypto.spec.SecretKeySpec(secretBytes, "HmacSHA256");
+            decoder = NimbusJwtDecoder.withSecretKey(secretKey).build();
         }
 
-        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri()).build();
         List<OAuth2TokenValidator<Jwt>> validators = new ArrayList<>();
-        validators.add(properties.issuer().isBlank()
-                ? JwtValidators.createDefault()
-                : JwtValidators.createDefaultWithIssuer(properties.issuer()));
-        validators.add(new AudienceValidator(properties.audience()));
+        if (!properties.issuer().isBlank()) {
+            validators.add(JwtValidators.createDefaultWithIssuer(properties.issuer()));
+        } else {
+            validators.add(JwtValidators.createDefault());
+        }
+        if (!properties.audience().isBlank()) {
+            validators.add(new AudienceValidator(properties.audience()));
+        }
         decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(validators));
         return decoder;
     }

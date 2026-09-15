@@ -9,6 +9,8 @@ import com.example.efficientia.cadastrobase.api.CadastroBaseContracts.UsuarioRes
 import com.example.efficientia.cadastrobase.persistence.UsuarioEntity;
 import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import com.example.efficientia.cadastrobase.service.CadastroBaseService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,8 @@ import java.util.Optional;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final UsuarioRepository usuarioRepository;
     private final CadastroBaseService cadastroBaseService;
@@ -60,30 +64,38 @@ public class AuthService {
             usuarioOpt = usuarioRepository.findByEmail(emailLimpo);
         }
 
-        UsuarioEntity usuario = usuarioOpt.orElseThrow(() ->
-                new AutenticacaoInvalidaException("Credenciais inválidas: usuário não encontrado.")
-        );
+        if (usuarioOpt.isEmpty()) {
+            log.warn("Falha de autenticação: Usuário não encontrado para CPF/Email fornecido.");
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
+        }
+
+        UsuarioEntity usuario = usuarioOpt.get();
 
         if (!usuario.getCpf().equals(cpfLimpo)) {
-            throw new AutenticacaoInvalidaException("Credenciais inválidas: CPF diverge do cadastrado.");
+            log.warn("Falha de autenticação: CPF diverge para o usuário ID {}", usuario.getId());
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
         }
 
         if (!usuario.getEmail().equalsIgnoreCase(emailLimpo)) {
-            throw new AutenticacaoInvalidaException("Credenciais inválidas: e-mail diverge do cadastrado.");
+            log.warn("Falha de autenticação: E-mail diverge para o usuário ID {}", usuario.getId());
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
         }
 
         if (!Boolean.TRUE.equals(usuario.getAtivo())) {
-            throw new AutenticacaoInvalidaException("Usuário inativo no sistema.");
+            log.warn("Falha de autenticação: Usuário ID {} está inativo.", usuario.getId());
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
         }
 
         if (usuario.getCodigoInterno() != null && !usuario.getCodigoInterno().isBlank()) {
             if (!usuario.getCodigoInterno().equalsIgnoreCase(codigoEmpresaLimpo)) {
-                throw new AutenticacaoInvalidaException("Código da empresa incorreto.");
+                log.warn("Falha de autenticação: Código da empresa incorreto para usuário ID {}", usuario.getId());
+                throw new AutenticacaoInvalidaException("Credenciais inválidas.");
             }
         }
 
         if (!passwordEncoder.matches(request.senha(), usuario.getSenhaHash())) {
-            throw new AutenticacaoInvalidaException("Credenciais inválidas: senha incorreta.");
+            log.warn("Falha de autenticação: Senha incorreta para usuário ID {}", usuario.getId());
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
         }
 
         String token = jwtTokenService.gerarToken(usuario);
