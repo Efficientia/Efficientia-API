@@ -56,6 +56,18 @@ public class SecurityConfig {
                                 "/api/v1/status",
                                 "/api/v1/auth/**"
                         ).permitAll()
+                        .requestMatchers(
+                                "/api/v1/empresas/*/adms",
+                                "/api/v1/empresas/*/adms/**",
+                                "/api/v1/empresas/*/funcionarios",
+                                "/api/v1/empresas/*/funcionarios/**"
+                        ).hasAnyRole("ADMIN", "ADMINISTRADOR")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/empresas", "/api/v1/empresas/").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/empresas/*/primeiro-admin").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/empresas/codigo/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/empresas/cnpj/**").permitAll()
+                        .requestMatchers("/api/v1/empresas/**")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/exportacoes/**")
                         .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/exportacoes/**")

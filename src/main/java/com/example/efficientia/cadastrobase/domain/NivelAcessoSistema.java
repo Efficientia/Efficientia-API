@@ -5,19 +5,17 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 import java.util.Locale;
 
-public enum TipoUsuario {
-    administrador,
-    motorista,
-    manobrista,
-    analista,
-    pecuarista,
-    curraleiro;
+public enum NivelAcessoSistema {
+    administrativo,
+    auditoria,
+    conducao;
+
     @JsonCreator
-    public static TipoUsuario from(String value) {
+    public static NivelAcessoSistema from(String value) {
         if (value == null) {
             return null;
         }
-        return TipoUsuario.valueOf(value.trim().toLowerCase(Locale.ROOT));
+        return NivelAcessoSistema.valueOf(value.trim().toLowerCase(Locale.ROOT));
     }
 
     @JsonValue

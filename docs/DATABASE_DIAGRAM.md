@@ -8,11 +8,49 @@ Este documento contém o Esquema Relacional do Banco de Dados do sistema **Effic
 
 ```mermaid
 erDiagram
+    empresa {
+        int id PK
+        int endereco_id FK
+        varchar150 nome
+        varchar150 razao_social
+        varchar20 codigo_interno UK
+        varchar150 email UK
+        varchar14 cnpj UK
+    }
+
+    configuracao_operacao {
+        int id PK
+        int empresa_id FK
+        integer tempo_max_viagem_horas
+        integer prazo_analise_horas
+        numeric meta_mortalidade
+        integer qtd_assinaturas_obrigatorias
+        boolean alerta_sirene_re
+        integer alerta_inspecao_dias
+        boolean alerta_cnh_vencida
+        integer alerta_tempo_parada_imprevista
+    }
+
+    empresa_admin {
+        int id PK
+        int empresa_id FK
+        varchar20 codigo_empresa
+        varchar14 cnpj_empresa
+        varchar150 nome
+        varchar150 email UK
+        varchar11 cpf UK
+        varchar20 telefone
+        varchar100 cargo
+        varchar255 senha_hash
+        boolean ativo
+    }
+
     usuario {
         int id PK
+        int empresa_id FK
         tipo_usuario tipo
         varchar11 cpf UK
-        varchar50 codigo_interno UK
+        varchar50 codigo_interno
         varchar150 nome
         date data_nascimento
         varchar150 email UK
@@ -20,7 +58,6 @@ erDiagram
         varchar255 senha_hash
         boolean ativo
     }
-
     veiculo_cavalo {
         int id PK
         varchar7 placa
