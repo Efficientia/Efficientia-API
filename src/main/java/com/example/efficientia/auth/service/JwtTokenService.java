@@ -1,6 +1,8 @@
 package com.example.efficientia.auth.service;
 
 import com.example.efficientia.cadastrobase.persistence.UsuarioEntity;
+import com.example.efficientia.empresa.domain.Empresa;
+import com.example.efficientia.empresa.domain.EmpresaAdmin;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
@@ -56,6 +58,45 @@ public class JwtTokenService {
             return signedJWT.serialize();
         } catch (Exception e) {
             throw new IllegalStateException("Erro ao gerar token JWT de autenticação", e);
+        }
+    }
+
+    public String gerarTokenAdmin(EmpresaAdmin admin, Empresa empresa) {
+        try {
+            Instant agora = Instant.now();
+            Instant expiracao = agora.plusSeconds(86400); // 24h
+
+            JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
+                    .subject(String.valueOf(admin.getId()))
+                    .issuer("efficientia-api")
+                    .issueTime(Date.from(agora))
+                    .expirationTime(Date.from(expiracao))
+                    .claim("admin_id", admin.getId())
+                    .claim("usuario_id", admin.getId())
+                    .claim("nome", admin.getNome())
+                    .claim("email", admin.getEmail())
+                    .claim("empresa_id", empresa.getId())
+                    .claim("codigo_empresa", empresa.getCodigoEmpresa())
+                    .claim("cnpj", empresa.getCnpj())
+                    .claim("nome_empresa", empresa.getNomeEmpresa())
+                    .claim("roles", List.of("ADMIN"))
+                    .claim("role", "ADMIN")
+                    .claim("tipo", "ADMINISTRADOR_EMPRESA");
+
+            if (admin.getCpf() != null && !admin.getCpf().isBlank()) {
+                builder.claim("cpf", admin.getCpf());
+            }
+            if (admin.getCargo() != null && !admin.getCargo().isBlank()) {
+                builder.claim("cargo", admin.getCargo());
+            }
+
+            JWSSigner signer = new MACSigner(secret.getBytes(StandardCharsets.UTF_8));
+            SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), builder.build());
+            signedJWT.sign(signer);
+
+            return signedJWT.serialize();
+        } catch (Exception e) {
+            throw new IllegalStateException("Erro ao gerar token JWT de administrador", e);
         }
     }
 }

@@ -18,7 +18,7 @@ import java.util.Set;
 public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     private static final Set<String> SUPPORTED_ROLES = Set.of(
-            "MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN"
+            "MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR"
     );
 
     @Override
@@ -51,6 +51,11 @@ public class JwtRoleConverter implements Converter<Jwt, AbstractAuthenticationTo
             }
             if (SUPPORTED_ROLES.contains(role)) {
                 roles.add(role);
+                if ("ADMINISTRADOR".equals(role)) {
+                    roles.add("ADMIN");
+                } else if ("ADMIN".equals(role)) {
+                    roles.add("ADMINISTRADOR");
+                }
             }
         }
     }

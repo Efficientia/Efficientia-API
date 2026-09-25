@@ -124,7 +124,63 @@ Os usuários do sistema possuem papéis mapeados a partir de `TipoUsuario`:
 ```
 - **Erros Possíveis:** `401 Unauthorized` (`{"title": "Falha na autenticação", "detail": "Credenciais inválidas."}`).
 
----
+#### `POST /api/v1/empresas` (ou `POST /api/v1/auth/empresas`) — Cadastro de Empresas
+- **O que faz:** Cadastra uma nova empresa parceira e gera automaticamente o **código corporativo de 8 dígitos** (3 letras iniciais + 5 números aleatórios, ex: `FRI48291`). **Obrigatoriedade:** Logo após este cadastro, o frontend deve direcionar obrigatoriamente para o cadastro do primeiro administrador.
+- **Autenticação:** Pública (`permitAll()`).
+- **Corpo da Requisição (JSON):**
+```json
+{
+  "nomeEmpresa": "Friboi Alimentos",
+  "razaoSocial": "JBS S.A.",
+  "cnpj": "12.345.678/0001-95",
+  "emailCorporativo": "contato@friboi.com.br",
+  "senha": "senhaSeguraOpcional123",
+  "enderecoId": 1
+}
+```
+- **Exemplo de Resposta (201 Created):**
+```json
+{
+  "id": 1,
+  "codigoEmpresa": "FRI48291",
+  "codigo": "FRI48291",
+  "codigoInterno": "FRI48291",
+  "nomeEmpresa": "Friboi Alimentos",
+  "razaoSocial": "JBS S.A.",
+  "cnpj": "12345678000195",
+  "emailCorporativo": "contato@friboi.com.br",
+  "status": "PENDENTE_PRIMEIRO_ADMIN",
+  "requerPrimeiroAdmin": true,
+  "proximoPasso": "CADASTRO_PRIMEIRO_ADMIN",
+  "mensagem": "Empresa registrada com sucesso. O cadastro do primeiro administrador é obrigatório para liberar o acesso ao sistema.",
+  "criadoEm": "2026-09-24T14:30:00Z"
+}
+```
+
+#### `POST /api/v1/auth/empresa/login` — Login / Verificação de Status da Empresa
+- **O que faz:** Permite identificar a empresa por CNPJ, e-mail empresarial ou código de acesso. Se a empresa não possuir administrador cadastrado, sinaliza `requerPrimeiroAdmin: true` para direcionar à esteira obrigatória. Se credenciais corporativas forem fornecidas, autentica o acesso.
+- **Autenticação:** Pública (`permitAll()`).
+
+#### `POST /api/v1/auth/adm/primeiro-acesso` — Cadastro Obrigatório do Primeiro Administrador
+- **O que faz:** Registra o primeiro gestor da empresa imediatamente após a criação corporativa e entrega o token JWT com acesso liberado.
+- **Autenticação:** Pública (`permitAll()`).
+- **Regra:** Bloqueado (`403 Forbidden`) se a empresa já possuir qualquer administrador cadastrado.
+
+#### `POST /api/v1/auth/adm/login` — Login de Administrador por Empresa
+- **O que faz:** Autentica o gestor por e-mail ou CPF e senha, retornando token JWT com autoridades `ROLE_ADMIN` e `ROLE_ADMINISTRADOR`.
+- **Autenticação:** Pública (`permitAll()`).
+
+#### `POST /api/v1/empresas/{empresaId}/adms` — Adesão de Novos Administradores
+- **O que faz:** Cadastra novos administradores vinculados à mesma empresa.
+- **Autenticação:** Protegida (`hasRole("ADMIN")`).
+
+#### `POST /api/v1/empresas/{empresaId}/funcionarios` — Cadastro de Funcionários da Empresa
+- **O que faz:** Cadastra motoristas, manobristas, analistas, curraleiros ou pecuaristas associados ao código da empresa.
+- **Autenticação:** Protegida (`hasRole("ADMIN")`).
+
+#### `GET /api/v1/empresas/{empresaId}/funcionarios` — Listagem de Funcionários da Empresa
+- **O que faz:** Lista os funcionários da empresa parceira.
+- **Autenticação:** Protegida (`hasRole("ADMIN")`).
 
 ### 📋 4.3 Cadastros Base (`/api/v1`) (`PROTEGIDO`)
 
@@ -211,6 +267,28 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 #### `GET /api/v1/exportacoes/{id}/conteudo`
 - **O que faz:** Faz o download do arquivo `.zip` final quando o status estiver `CONCLUIDO`.
 
+
+### 🏢 4.7 Empresas Parceiras e Administradores (`/api/v1/empresas` e `/api/v1/auth/adm`)
+
+#### `POST /api/v1/empresas` (e alias `/api/v1/auth/empresas`) (`PÚBLICO`)
+- **O que faz:** Cadastra nova empresa parceira e gera automaticamente o código corporativo de 8 dígitos (`codigoEmpresa`, ex: `FRI48291`). Senha é opcional.
+- **Campos obrigatórios:** `nomeEmpresa`, `cnpj` (14 dígitos), `emailCorporativo`.
+
+#### `POST /api/v1/auth/adm/primeiro-acesso` (`PÚBLICO`)
+- **O que faz:** Cadastra o primeiro administrador da empresa imediatamente após a criação corporativa e entrega o token JWT com perfil `ROLE_ADMIN` liberado.
+- **Regra:** Bloqueado (`403 Forbidden`) se a empresa já possuir qualquer administrador cadastrado.
+
+#### `POST /api/v1/auth/adm/login` (`PÚBLICO`)
+- **O que faz:** Autentica o administrador por e-mail (ou CPF) e senha, retornando o token JWT Bearer com perfil `ROLE_ADMIN`.
+
+#### `POST /api/v1/empresas/{empresaId}/adms` (`PROTEGIDO - ROLE_ADMIN`)
+- **O que faz:** Adesão de novos administradores à empresa, restrita a administradores autenticados da mesma empresa.
+
+#### `GET /api/v1/empresas/{empresaId}/adms` (`PROTEGIDO - ROLE_ADMIN`)
+- **O que faz:** Lista todos os administradores vinculados à empresa (organograma corporativo/RH).
+
+#### `GET /api/v1/empresas/codigo/{codigo}` (`PÚBLICO`)
+- **O que faz:** Consulta dados públicos da empresa através do código de 8 dígitos para validação no app mobile.
 ---
 
 ## 🛠️ 5. Exemplos de Implementação

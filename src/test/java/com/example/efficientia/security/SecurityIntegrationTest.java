@@ -53,6 +53,17 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void rotaCadastroEmpresaDeveSerPublicaMasListagemProtegida() throws Exception {
+        // POST /api/v1/empresas não exige autenticação (não retorna 401)
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+
+        // GET /api/v1/empresas exige autenticação (retorna 401)
+        mockMvc.perform(get("/api/v1/empresas"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void tokenHs256ValidoDeveAcessarRotasPermitidas() throws Exception {
         mockMvc.perform(get("/api/v1/documentos")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))))
@@ -61,5 +72,66 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/api/v1/relatorios-viagem")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALISTA"))))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rotasAuthAdmDevemSerPublicas() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/auth/adm/login"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/auth/adm/primeiro-acesso"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/auth/empresa/login"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/primeiro-admin"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+
+        mockMvc.perform(get("/api/v1/empresas/cnpj/12345678000195"))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()));
+    }
+
+    @Test
+    void rotaAdesaoEListagemAdmsExigeRoleAdmin() throws Exception {
+        // Sem autenticação -> 401
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/adms"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/empresas/1/adms"))
+                .andExpect(status().isUnauthorized());
+
+        // Com papel que não seja ADMIN -> 403 Forbidden
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/adms")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/v1/empresas/1/adms")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))))
+                .andExpect(status().isForbidden());
+
+        // Com papel ADMIN -> Autorizado (não retorna 401/403)
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/adms")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(403, result.getResponse().getStatus()));
+    }
+
+    @Test
+    void rotaGestaoFuncionariosExigeRoleAdmin() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/funcionarios"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/empresas/1/funcionarios"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/funcionarios")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/empresas/1/funcionarios")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus()))
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertNotEquals(403, result.getResponse().getStatus()));
     }
 }
