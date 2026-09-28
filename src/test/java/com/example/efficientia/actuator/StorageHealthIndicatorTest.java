@@ -29,10 +29,10 @@ class StorageHealthIndicatorTest {
     }
 
     @Test
-    void deveRetornarStatusDownQuandoDiretorioNaoExistir() {
-        Path fakePath = Path.of("caminho_inexistente_que_nao_deve_existir_12345");
+    void deveCriarDiretorioERetornarStatusUpQuandoDiretorioNaoExistir(@TempDir Path tempDir) {
+        Path subFolder = tempDir.resolve("pasta_nova");
         StorageProperties properties = new StorageProperties(
-                fakePath,
+                subFolder,
                 DataSize.ofMegabytes(25),
                 DataSize.ofMegabytes(10)
         );
@@ -40,7 +40,8 @@ class StorageHealthIndicatorTest {
 
         Health health = indicator.health();
 
-        assertThat(health.getStatus()).isEqualTo(Status.DOWN);
-        assertThat(health.getDetails()).containsEntry("reason", "Diretório do storage não existe.");
+        assertThat(health.getStatus()).isEqualTo(Status.UP);
+        assertThat(subFolder).exists();
+        assertThat(subFolder).isDirectory();
     }
 }
