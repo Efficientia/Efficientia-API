@@ -20,10 +20,14 @@ public class StorageHealthIndicator implements HealthIndicator {
     @Override
     public Health health() {
         if (!Files.exists(rootPath)) {
-            return Health.down()
-                    .withDetail("storagePath", rootPath.toString())
-                    .withDetail("reason", "Diretório do storage não existe.")
-                    .build();
+            try {
+                Files.createDirectories(rootPath);
+            } catch (Exception e) {
+                return Health.down()
+                        .withDetail("storagePath", rootPath.toString())
+                        .withDetail("reason", "Diretório do storage não existe e não foi possível criá-lo: " + e.getMessage())
+                        .build();
+            }
         }
         if (!Files.isDirectory(rootPath)) {
             return Health.down()
