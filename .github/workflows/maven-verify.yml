@@ -25,3 +25,11 @@ jobs:
 
       - name: Build and test
         run: ./mvnw --batch-mode --no-transfer-progress verify
+
+      - name: Upload JaCoCo Report
+        uses: actions/upload-artifact@v4
+        if: always() # Upload report even if tests/coverage fail
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 14
