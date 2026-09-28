@@ -401,7 +401,7 @@ class EmpresaAdminServiceTest {
                 hash, true, Instant.now(), Instant.now()
         );
 
-        when(adminRepository.buscarPorEmail("12345678901")).thenReturn(Optional.empty());
+        when(adminRepository.buscarPorEmail("123.456.789-01")).thenReturn(Optional.empty());
         when(adminRepository.buscarPorCpf("12345678901")).thenReturn(Optional.of(admin));
         when(empresaRepository.buscarPorId(1L)).thenReturn(Optional.of(empresaMock));
         when(jwtTokenService.gerarTokenAdmin(admin, empresaMock)).thenReturn("jwt.token.adm");
