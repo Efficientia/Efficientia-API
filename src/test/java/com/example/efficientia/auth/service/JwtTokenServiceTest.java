@@ -51,7 +51,7 @@ class JwtTokenServiceTest {
     void deveGerarTokenAdminComSucesso() throws ParseException {
         JwtTokenService service = new JwtTokenService("chave-secreta-de-teste-muito-segura-e-longa-32bytes!");
 
-        Empresa empresa = new Empresa(1L, 10L, "Friboi", "Friboi Alimentos SA", "FRI123", "friboi@teste.com", "12345678000199");
+        Empresa empresa = new Empresa(1L, "FRI123", "Friboi", "12345678000199", "friboi@teste.com", null, true, Instant.now(), Instant.now());
         EmpresaAdmin admin = new EmpresaAdmin(
                 50L, 1L, "FRI123", "12345678000199", "Admin Friboi",
                 "admin@friboi.com", "11122233344", null, "Gerente",
