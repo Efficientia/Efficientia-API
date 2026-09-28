@@ -114,7 +114,7 @@ public class EmpresaService {
      * do cadastro do primeiro administrador.
      */
     public LoginEmpresaResponse autenticarEmpresa(LoginEmpresaRequest request) {
-        String identificador = request.cnpj().trim();
+        String identificador = request.cnpj() != null ? request.cnpj().trim() : "";
         Empresa empresa = localizarEmpresaPorIdentificador(identificador)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada para o identificador informado."));
 
