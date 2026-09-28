@@ -390,4 +390,99 @@ class EmpresaAdminServiceTest {
         assertEquals("mocked.jwt.token", response.token());
         assertEquals("Carlos Silva", response.admin().nome());
     }
+
+    @Test
+    @DisplayName("Deve autenticar admin com sucesso via CPF")
+    void deveAutenticarAdminComCpf() {
+        String hash = passwordEncoder.encode("senhaCorreta123");
+        EmpresaAdmin admin = new EmpresaAdmin(
+                10L, 1L, "FRI12345", "12345678000195", "Carlos Silva",
+                "carlos@friboi.com.br", "12345678901", null, "Administrador",
+                hash, true, Instant.now(), Instant.now()
+        );
+
+        when(adminRepository.buscarPorEmail("12345678901")).thenReturn(Optional.empty());
+        when(adminRepository.buscarPorCpf("12345678901")).thenReturn(Optional.of(admin));
+        when(empresaRepository.buscarPorId(1L)).thenReturn(Optional.of(empresaMock));
+        when(jwtTokenService.gerarTokenAdmin(admin, empresaMock)).thenReturn("jwt.token.adm");
+
+        LoginAdminRequest request = new LoginAdminRequest("123.456.789-01", "senhaCorreta123", null);
+        LoginAdminResponse response = service.autenticarAdmin(request);
+
+        assertNotNull(response);
+    }
+
+    @Test
+    @DisplayName("Deve falhar ao autenticar admin se código da empresa divergir")
+    void deveFalharAutenticacaoAdminCodigoEmpresaDivergente() {
+        EmpresaAdmin admin = new EmpresaAdmin(
+                10L, 1L, "FRI12345", "12345678000195", "Carlos Silva",
+                "carlos@friboi.com.br", "12345678901", null, "Administrador",
+                "hash", true, Instant.now(), Instant.now()
+        );
+
+        when(adminRepository.buscarPorEmail("carlos@friboi.com.br")).thenReturn(Optional.of(admin));
+
+        LoginAdminRequest request = new LoginAdminRequest("carlos@friboi.com.br", "senhaCorreta123", "COD-ERRADO");
+
+        assertThrows(AutenticacaoInvalidaException.class, () -> service.autenticarAdmin(request));
+    }
+
+    @Test
+    @DisplayName("Deve falhar ao autenticar admin se CNPJ divergir")
+    void deveFalharAutenticacaoAdminCnpjDivergente() {
+        EmpresaAdmin admin = new EmpresaAdmin(
+                10L, 1L, "FRI12345", "12345678000195", "Carlos Silva",
+                "carlos@friboi.com.br", "12345678901", null, "Administrador",
+                "hash", true, Instant.now(), Instant.now()
+        );
+
+        when(adminRepository.buscarPorEmail("carlos@friboi.com.br")).thenReturn(Optional.of(admin));
+
+        LoginAdminRequest request = new LoginAdminRequest("carlos@friboi.com.br", "senhaCorreta123", null, "99.999.999/0001-99");
+
+        assertThrows(AutenticacaoInvalidaException.class, () -> service.autenticarAdmin(request));
+    }
+
+    @Test
+    @DisplayName("Deve falhar ao autenticar se admin não for encontrado por email nem cpf")
+    void deveFalharAutenticacaoNaoEncontrado() {
+        when(adminRepository.buscarPorEmail("inexistente@teste.com")).thenReturn(Optional.empty());
+
+        LoginAdminRequest request = new LoginAdminRequest("inexistente@teste.com", "senhaCorreta123", null);
+
+        assertThrows(AutenticacaoInvalidaException.class, () -> service.autenticarAdmin(request));
+    }
+
+    @Test
+    @DisplayName("Deve buscar empresa por código ou cnpj no cadastrarPrimeiroAdmin")
+    void deveBuscarEmpresaPorCodigoOuCnpj() {
+        when(empresaRepository.buscarPorCodigo("FRI12345")).thenReturn(Optional.of(empresaMock));
+        when(adminRepository.contarPorEmpresaId(1L)).thenReturn(0L);
+        when(adminRepository.salvar(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        CriarPrimeiroAdminRequest reqCod = new CriarPrimeiroAdminRequest(
+                null, "FRI12345", null, "Nome", "teste@teste.com", "senha", "12345678901", null, null
+        );
+        assertNotNull(service.cadastrarPrimeiroAdmin(reqCod));
+
+        when(empresaRepository.buscarPorCnpj("12345678000195")).thenReturn(Optional.of(empresaMock));
+        CriarPrimeiroAdminRequest reqCnpj = new CriarPrimeiroAdminRequest(
+                null, null, "12.345.678/0001-95", "Nome", "teste2@teste.com", "senha", "12345678902", null, null
+        );
+        assertNotNull(service.cadastrarPrimeiroAdmin(reqCnpj));
+    }
+
+    @Test
+    @DisplayName("Deve falhar se nao encontrar empresa por id, codigo ou cnpj")
+    void deveFalharLocalizarEmpresaNaoEncontrada() {
+        assertThrows(CadastroInvalidoException.class, () -> {
+            service.cadastrarPrimeiroAdmin(new CriarPrimeiroAdminRequest(null, null, null, "A", "b@b.com", "1", "12345678901", null, null));
+        });
+        
+        when(empresaRepository.buscarPorId(99L)).thenReturn(Optional.empty());
+        assertThrows(ResponseStatusException.class, () -> {
+            service.cadastrarPrimeiroAdmin(new CriarPrimeiroAdminRequest(99L, null, null, "A", "b@b.com", "1", "12345678901", null, null));
+        });
+    }
 }
