@@ -44,6 +44,6 @@ class EmpresaTest {
         assertEquals(2L, empresa.getId());
         assertEquals("COD456", empresa.getCodigoEmpresa());
         assertNull(empresa.getEnderecoId());
-        assertNull(empresa.getRazaoSocial());
+        assertEquals("Nome Alt", empresa.getRazaoSocial());
     }
 }
