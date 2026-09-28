@@ -485,4 +485,39 @@ class EmpresaAdminServiceTest {
             service.cadastrarPrimeiroAdmin(new CriarPrimeiroAdminRequest(99L, null, null, "A", "b@b.com", "1", "12345678901", null, null));
         });
     }
+
+    @Test
+    @DisplayName("Deve usar o UsuarioRepository quando estiver presente - Sincronizacao")
+    void deveUsarUsuarioRepositoryParaSincronizacaoECadastros() {
+        com.example.efficientia.cadastrobase.persistence.UsuarioRepository userRepo = org.mockito.Mockito.mock(com.example.efficientia.cadastrobase.persistence.UsuarioRepository.class);
+        EmpresaAdminService fullService = new EmpresaAdminService(empresaRepository, adminRepository, jwtTokenService, userRepo);
+        
+        when(empresaRepository.buscarPorId(1L)).thenReturn(Optional.of(empresaMock));
+        when(adminRepository.contarPorEmpresaId(1L)).thenReturn(0L);
+        when(adminRepository.salvar(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Teste 1: Sincronizar admin
+        CriarPrimeiroAdminRequest req = new CriarPrimeiroAdminRequest(1L, null, null, "Nome", "a@a.com", "senha", "11122233344", null, null);
+        fullService.cadastrarPrimeiroAdmin(req);
+        verify(userRepo).save(any());
+
+        // Teste 2: Cadastrar funcionario duplicado CPF e Email
+        EmpresaAdmin adminLogado = new EmpresaAdmin(10L, 1L, "FRI", "0", "Admin", "a@a.com", null, null, null, "hash", true, Instant.now(), Instant.now());
+        when(adminRepository.buscarPorId(10L)).thenReturn(Optional.of(adminLogado));
+        
+        when(userRepo.existsByCpf(any())).thenReturn(true);
+        var reqFuncCpf = new com.example.efficientia.empresa.api.EmpresaAdminContracts.CriarFuncionarioEmpresaRequest(
+                com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista, "11122233344", "Func", null, "b@b.com", null, "senha", null, null, null, null);
+        assertThrows(CadastroDuplicadoException.class, () -> fullService.cadastrarFuncionario(1L, reqFuncCpf, 10L));
+        
+        when(userRepo.existsByCpf(any())).thenReturn(false);
+        when(userRepo.existsByEmail(any())).thenReturn(true);
+        var reqFuncEmail = new com.example.efficientia.empresa.api.EmpresaAdminContracts.CriarFuncionarioEmpresaRequest(
+                com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista, "11122233344", "Func", null, "b@b.com", null, "senha", null, null, null, null);
+        assertThrows(CadastroDuplicadoException.class, () -> fullService.cadastrarFuncionario(1L, reqFuncEmail, 10L));
+
+        // Teste 3: Listar funcionarios
+        when(userRepo.findAll()).thenReturn(List.of());
+        assertEquals(0, fullService.listarFuncionariosPorEmpresa(1L, 10L).size());
+    }
 }
