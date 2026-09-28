@@ -100,4 +100,76 @@ class CadastroBaseServiceTest {
         );
         verify(cavaloRepository, never()).save(any(VeiculoCavaloEntity.class));
     }
+
+    @Test
+    void deveRejeitarUsuarioMenorDeIdade() {
+        var request = new CriarUsuarioRequest(TipoUsuario.motorista, "1", "1", "1", LocalDate.now().minusYears(10), "a@a.com", "1", "1");
+        assertThrows(CadastroInvalidoException.class, () -> service.criarUsuario(request));
+    }
+
+    @Test
+    void deveRejeitarUsuarioCpfDuplicado() {
+        when(usuarioRepository.existsByCpf(any())).thenReturn(true);
+        var request = new CriarUsuarioRequest(TipoUsuario.motorista, "1", "1", "1", LocalDate.now().minusYears(20), "a@a.com", "1", "1");
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarUsuario(request));
+    }
+
+    @Test
+    void deveRejeitarUsuarioEmailDuplicado() {
+        when(usuarioRepository.existsByCpf(any())).thenReturn(false);
+        when(usuarioRepository.existsByEmail(any())).thenReturn(true);
+        var request = new CriarUsuarioRequest(TipoUsuario.motorista, "1", "1", "1", LocalDate.now().minusYears(20), "a@a.com", "1", "1");
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarUsuario(request));
+    }
+
+    @Test
+    void deveCriarUsuarioCodigoInternoNuloEVazio() {
+        when(usuarioRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        var request = new CriarUsuarioRequest(TipoUsuario.motorista, "1", null, "1", LocalDate.now().minusYears(20), "a@a.com", "1", "1");
+        var resp1 = service.criarUsuario(request);
+        
+        var request2 = new CriarUsuarioRequest(TipoUsuario.motorista, "2", "   ", "1", LocalDate.now().minusYears(20), "b@b.com", "1", "1");
+        var resp2 = service.criarUsuario(request2);
+    }
+
+    @Test
+    void deveRejeitarFazendaSemEndereco() {
+        when(usuarioRepository.existsByIdAndTipo(1, TipoUsuario.pecuarista)).thenReturn(true);
+        when(enderecoRepository.existsById(1)).thenReturn(false);
+        assertThrows(CadastroInvalidoException.class, () -> service.criarFazenda(new CriarFazendaRequest(1, 1, "Fazenda")));
+    }
+
+    @Test
+    void deveCriarFazendaComSucesso() {
+        when(usuarioRepository.existsByIdAndTipo(1, TipoUsuario.pecuarista)).thenReturn(true);
+        when(enderecoRepository.existsById(1)).thenReturn(true);
+        when(fazendaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        service.criarFazenda(new CriarFazendaRequest(1, 1, "Fazenda"));
+    }
+
+    @Test
+    void deveCriarCavaloComSucesso() {
+        when(cavaloRepository.existsByPlaca(any())).thenReturn(false);
+        when(cavaloRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        service.criarCavalo(new CriarCavaloRequest("abc", true));
+    }
+
+    @Test
+    void deveRejeitarCarretaPlacaDuplicada() {
+        when(carretaRepository.existsByPlaca(any())).thenReturn(true);
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarCarreta(new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CriarCarretaRequest("abc", 50)));
+    }
+
+    @Test
+    void deveCriarCarretaComSucesso() {
+        when(carretaRepository.existsByPlaca(any())).thenReturn(false);
+        when(carretaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        service.criarCarreta(new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CriarCarretaRequest("abc", 50));
+    }
+
+    @Test
+    void deveCriarEnderecoComSucesso() {
+        when(enderecoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        service.criarEndereco(new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CriarEnderecoRequest("123", "rua", "1", "cid", "sp"));
+    }
 }
