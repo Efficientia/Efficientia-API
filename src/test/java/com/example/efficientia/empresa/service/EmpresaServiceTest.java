@@ -2,15 +2,21 @@ package com.example.efficientia.empresa.service;
 
 import com.example.efficientia.cadastrobase.api.CadastroDuplicadoException;
 import com.example.efficientia.cadastrobase.api.CadastroInvalidoException;
+import com.example.efficientia.empresa.api.EmpresaContracts.AtualizarDadosEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.CriarEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.EmpresaResponse;
+import com.example.efficientia.empresa.api.EmpresaContracts.EnderecoDto;
+import com.example.efficientia.empresa.api.EmpresaContracts.UploadLogoResponse;
 import com.example.efficientia.empresa.persistence.InMemoryEmpresaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -259,5 +265,157 @@ class EmpresaServiceTest {
         assertThrows(ResponseStatusException.class, () -> service.autenticarEmpresa(
                 new com.example.efficientia.empresa.api.EmpresaContracts.LoginEmpresaRequest("identificador-invalido-inexistente", null)
         ));
+    }
+
+    @Test
+    @DisplayName("Deve cadastrar empresa com dados complementares e endereco completo")
+    void deveCadastrarEmpresaComDadosComplementaresEEndereco() {
+        EnderecoDto endereco = new EnderecoDto(null, "79002190", "Av. Afonso Pena", "2450", "Campo Grande", "MS");
+        CriarEmpresaRequest request = new CriarEmpresaRequest(
+                "Efficientia Transportes",
+                "Efficientia",
+                "Efficientia Transportes Ltda.",
+                "12345678000190",
+                "operacao@efficientia.com.br",
+                "+55 (67) 99999-2048",
+                "senhaForte123",
+                null,
+                "79002190",
+                "Av. Afonso Pena",
+                "2450",
+                "Campo Grande",
+                "MS",
+                "https://cdn.efficientia.com/logo.svg",
+                endereco
+        );
+
+        EmpresaResponse response = service.cadastrarEmpresa(request);
+
+        assertNotNull(response.id());
+        assertEquals("Efficientia Transportes", response.nomeEmpresa());
+        assertEquals("Efficientia", response.nomeFantasia());
+        assertEquals("Efficientia Transportes Ltda.", response.razaoSocial());
+        assertEquals("+55 (67) 99999-2048", response.telefone());
+        assertEquals("79002190", response.cep());
+        assertEquals("Av. Afonso Pena", response.logradouro());
+        assertEquals("2450", response.numero());
+        assertEquals("Campo Grande", response.cidade());
+        assertEquals("MS", response.uf());
+        assertNotNull(response.enderecoId());
+        assertNotNull(response.endereco());
+        assertEquals("https://cdn.efficientia.com/logo.svg", response.logoUrl());
+    }
+
+    @Test
+    @DisplayName("Deve atualizar dados cadastrais complementares por ID (Etapa 1 de 3)")
+    void deveAtualizarDadosComplementaresPorId() {
+        CriarEmpresaRequest inicial = new CriarEmpresaRequest("Empresa Beta", "88888888000188", "beta@empresa.com", "senha123");
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(inicial);
+        assertEquals(1, cadastrada.etapaCadastro());
+
+        AtualizarDadosEmpresaRequest update = new AtualizarDadosEmpresaRequest(
+                "Beta Log",
+                "Beta Logistica S.A.",
+                "88888888000188",
+                "contato@betalog.com.br",
+                "+55 11 98888-7777",
+                "01001000",
+                "Praça da Sé",
+                "100",
+                "São Paulo",
+                "SP",
+                "/api/v1/empresas/" + cadastrada.id() + "/logo/conteudo",
+                null
+        );
+
+        EmpresaResponse atualizada = service.atualizarDadosComplementares(cadastrada.id(), update);
+
+        assertEquals("Beta Log", atualizada.nomeFantasia());
+        assertEquals("Beta Logistica S.A.", atualizada.razaoSocial());
+        assertEquals("contato@betalog.com.br", atualizada.emailCorporativo());
+        assertEquals("+55 11 98888-7777", atualizada.telefone());
+        assertEquals("01001000", atualizada.cep());
+        assertEquals("Praça da Sé", atualizada.logradouro());
+        assertEquals("100", atualizada.numero());
+        assertEquals("São Paulo", atualizada.cidade());
+        assertEquals("SP", atualizada.uf());
+        assertEquals(2, atualizada.etapaCadastro());
+    }
+
+    @Test
+    @DisplayName("Deve atualizar dados cadastrais complementares por Código corporativo")
+    void deveAtualizarDadosComplementaresPorCodigo() {
+        CriarEmpresaRequest inicial = new CriarEmpresaRequest("Empresa Gama", "77777777000177", "gama@empresa.com", "senha123");
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(inicial);
+
+        AtualizarDadosEmpresaRequest update = new AtualizarDadosEmpresaRequest(
+                "Gama Express",
+                "Gama Express Transportes",
+                null,
+                null,
+                "+55 67 91234-5678",
+                "79000000",
+                "Rua 14 de Julho",
+                "500",
+                "Campo Grande",
+                "MS",
+                null,
+                null
+        );
+
+        EmpresaResponse atualizada = service.atualizarDadosComplementaresPorCodigo(cadastrada.codigoEmpresa(), update);
+        assertEquals("Gama Express", atualizada.nomeFantasia());
+        assertEquals("+55 67 91234-5678", atualizada.telefone());
+        assertEquals(2, atualizada.etapaCadastro());
+    }
+
+    @Test
+    @DisplayName("Deve fazer upload de logotipo PNG ou SVG válido e recuperar bytes")
+    void deveFazerUploadEObterLogotipo() {
+        CriarEmpresaRequest inicial = new CriarEmpresaRequest("Empresa Logo", "66666666000166", "logo@empresa.com", "senha123");
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(inicial);
+
+        byte[] conteudoPng = new byte[]{1, 2, 3, 4, 5};
+        MockMultipartFile file = new MockMultipartFile("arquivo", "logo.png", "image/png", conteudoPng);
+
+        UploadLogoResponse uploadResp = service.atualizarLogo(cadastrada.id(), file);
+        assertNotNull(uploadResp.logoUrl());
+        assertEquals("image/png", uploadResp.mimeType());
+        assertEquals(5L, uploadResp.tamanhoBytes());
+
+        byte[] obtido = service.obterConteudoLogo(cadastrada.id());
+        assertArrayEquals(conteudoPng, obtido);
+        assertEquals("image/png", service.obterMimeTypeLogo(cadastrada.id()));
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar logotipo com formato invalido ou tamanho acima de 5 MB")
+    void deveRejeitarLogoInvalida() {
+        CriarEmpresaRequest inicial = new CriarEmpresaRequest("Empresa Invalida", "55555555000155", "inv@empresa.com", "senha123");
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(inicial);
+
+        // Formato não aceito
+        MockMultipartFile arquivoTexto = new MockMultipartFile("arquivo", "logo.txt", "text/plain", new byte[]{1, 2, 3});
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarLogo(cadastrada.id(), arquivoTexto));
+
+        // Tamanho > 5MB
+        byte[] grande = new byte[6 * 1024 * 1024];
+        MockMultipartFile arquivoGrande = new MockMultipartFile("arquivo", "logo.png", "image/png", grande);
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarLogo(cadastrada.id(), arquivoGrande));
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar atualizacao com CNPJ ou email duplicado de outra empresa")
+    void deveRejeitarDuplicidadeNaAtualizacao() {
+        CriarEmpresaRequest empA = new CriarEmpresaRequest("Empresa A", "11111111000111", "a@empresa.com", "senha123");
+        CriarEmpresaRequest empB = new CriarEmpresaRequest("Empresa B", "22222222000122", "b@empresa.com", "senha123");
+        EmpresaResponse cadA = service.cadastrarEmpresa(empA);
+        EmpresaResponse cadB = service.cadastrarEmpresa(empB);
+
+        AtualizarDadosEmpresaRequest duplicarCnpj = new AtualizarDadosEmpresaRequest(null, null, cadA.cnpj(), null, null, null, null, null, null, null, null, null);
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarDadosComplementares(cadB.id(), duplicarCnpj));
+
+        AtualizarDadosEmpresaRequest duplicarEmail = new AtualizarDadosEmpresaRequest(null, null, null, cadA.emailCorporativo(), null, null, null, null, null, null, null, null);
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarDadosComplementares(cadB.id(), duplicarEmail));
     }
 }

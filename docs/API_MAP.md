@@ -287,9 +287,73 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 #### `GET /api/v1/empresas/{empresaId}/adms` (`PROTEGIDO - ROLE_ADMIN`)
 - **O que faz:** Lista todos os administradores vinculados à empresa (organograma corporativo/RH).
 
+#### `PUT /api/v1/empresas/{id}` (e alias `/api/v1/empresas/{id}/dados-complementares`, `/api/v1/empresas/{id}/etapa-1`) — Etapa 1 de 3 (Dados da Empresa)
+- **O que faz:** Salva e complementa as informações da empresa após o cadastro inicial e login do 1º administrador (CNPJ, Razão Social, Nome Fantasia, E-mail Corporativo, Telefone, Endereço completo: CEP, Logradouro, Número, Cidade, UF e URL de logo). Avança o cadastro para a etapa 2.
+- **Autenticação:** Permite acesso durante onboarding ou com Bearer Token de `ROLE_ADMIN`.
+- **Também disponível por código:** `PUT /api/v1/empresas/codigo/{codigo}`
+- **Exemplo de Corpo (JSON):**
+```json
+{
+  "nomeFantasia": "Efficientia",
+  "razaoSocial": "Efficientia Transportes Ltda.",
+  "cnpj": "12.345.678/0001-90",
+  "emailCorporativo": "operacao@efficientia.com.br",
+  "telefone": "+55 (67) 99999-2048",
+  "cep": "79002-190",
+  "logradouro": "Av. Afonso Pena",
+  "numero": "2450",
+  "cidade": "Campo Grande",
+  "estado": "MS"
+}
+```
+
+#### `POST /api/v1/empresas/{id}/logo` — Upload de Logotipo da Empresa
+- **O que faz:** Faz upload do logotipo da empresa no formato PNG ou SVG (tamanho máximo de até 5 MB).
+- **Content-Type:** `multipart/form-data` (campo `arquivo` ou `file`)
+- **Resposta (200 OK):**
+```json
+{
+  "logoUrl": "/api/v1/empresas/1/logo/conteudo",
+  "mensagem": "Logo da empresa enviada com sucesso.",
+  "tamanhoBytes": 1048576,
+  "mimeType": "image/png"
+}
+```
+
+#### `GET /api/v1/empresas/{id}/logo/conteudo` — Visualização / Download do Logotipo
+- **O que faz:** Retorna o binário da imagem com o cabeçalho `Content-Type` adequado (`image/png` ou `image/svg+xml`).
+- **Autenticação:** Pública (`permitAll()`) para exibição direta em tags `<img src="...">` ou no app mobile.
+
 #### `GET /api/v1/empresas/codigo/{codigo}` (`PÚBLICO`)
 - **O que faz:** Consulta dados públicos da empresa através do código de 8 dígitos para validação no app mobile.
+
 ---
+
+### 🔄 4.8 Fluxo Completo de Onboarding e Integração Web & Mobile
+
+1. **Criação da Empresa (Portal Web):**
+   - Usuário gestor envia razão social, nome, CNPJ e e-mail via `POST /api/v1/empresas`.
+   - API gera código corporativo único de 8 dígitos (ex: `FRI48291`) e retorna `requerPrimeiroAdmin: true`.
+
+2. **Primeiro Acesso do Administrador (Portal Web):**
+   - Usuário preenche seus dados pessoais e senha via `POST /api/v1/auth/adm/primeiro-acesso` usando o código da empresa.
+   - API libera o acesso imediato com token JWT contendo `ROLE_ADMIN`.
+
+3. **Etapa 1 de 3 - Dados Complementares e Logo (Portal Web):**
+   - Usuário autenticado preenche telefone, endereço completo e faz upload do logotipo PNG/SVG (até 5 MB) via `PUT /api/v1/empresas/{id}/dados-complementares` e `POST /api/v1/empresas/{id}/logo`.
+   - O botão **Salvar e continuar** avança a empresa para `etapaCadastro: 2`.
+
+4. **Pré-Login de Funcionários pelo Administrador (Portal Web):**
+   - O administrador cadastra motoristas e analistas via `POST /api/v1/empresas/{empresaId}/funcionarios`.
+   - A API associa o usuário diretamente ao tenant da empresa através do `codigoInterno`.
+
+5. **Acesso do Motorista no Aplicativo Mobile (App Mobile):**
+   - O motorista faz login no aplicativo mobile (`POST /api/v1/auth/login`) informando CPF/e-mail, senha e código da empresa.
+   - Preenche os dados de viagem (`POST /api/v1/relatorios-viagem`), assina digitalmente e envia comprovantes (`POST /api/v1/documentos`).
+
+6. **Auditoria e Download de Documentos pelo Analista (Portal Web):**
+   - O analista consulta os relatórios de viagem e documentos enviados pelo mobile.
+   - Realiza download direto (`GET /api/v1/documentos/{id}/conteudo`) ou solicita exportação assíncrona em `.zip` (`POST /api/v1/exportacoes`).
 
 ## 🛠️ 5. Exemplos de Implementação
 

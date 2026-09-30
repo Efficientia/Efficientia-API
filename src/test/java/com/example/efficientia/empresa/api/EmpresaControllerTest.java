@@ -2,7 +2,10 @@ package com.example.efficientia.empresa.api;
 
 import com.example.efficientia.cadastrobase.api.CadastroBaseExceptionHandler;
 import com.example.efficientia.cadastrobase.api.CadastroDuplicadoException;
+import com.example.efficientia.empresa.api.EmpresaContracts.AtualizarDadosEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.EmpresaResponse;
+import com.example.efficientia.empresa.api.EmpresaContracts.EnderecoDto;
+import com.example.efficientia.empresa.api.EmpresaContracts.UploadLogoResponse;
 import com.example.efficientia.empresa.service.EmpresaService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,9 +22,14 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -215,6 +223,100 @@ class EmpresaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cnpj").value("12345678000195"))
                 .andExpect(jsonPath("$.nomeEmpresa").value("Friboi Alimentos"));
+    }
+
+    @Test
+    @DisplayName("Deve atualizar dados complementares da empresa via PUT /api/v1/empresas/{id}/dados-complementares")
+    void deveAtualizarDadosComplementares() throws Exception {
+        EnderecoDto endereco = new EnderecoDto(1, "79002190", "Av. Afonso Pena", "2450", "Campo Grande", "MS");
+        EmpresaResponse response = new EmpresaResponse(
+                1L, "EFF12345", "EFF12345", "EFF12345",
+                "Efficientia Transportes", "Efficientia Transportes", "Efficientia", "Efficientia Transportes Ltda.",
+                "12345678000190", "operacao@efficientia.com.br", "operacao@efficientia.com.br",
+                "+55 (67) 99999-2048", 1, endereco, "79002190", "Av. Afonso Pena", "2450", "Campo Grande", "MS", "MS",
+                "/api/v1/empresas/1/logo/conteudo", 2, false, "ATIVO", false, "PAINEL_ADMINISTRATIVO",
+                "Dados da empresa atualizados com sucesso.", Instant.now(), Instant.now()
+        );
+
+        when(empresaService.atualizarDadosComplementares(eq(1L), any(AtualizarDadosEmpresaRequest.class)))
+                .thenReturn(response);
+
+        String json = """
+                {
+                  "nomeFantasia": "Efficientia",
+                  "razaoSocial": "Efficientia Transportes Ltda.",
+                  "cnpj": "12.345.678/0001-90",
+                  "emailCorporativo": "operacao@efficientia.com.br",
+                  "telefone": "+55 (67) 99999-2048",
+                  "cep": "79002-190",
+                  "logradouro": "Av. Afonso Pena",
+                  "numero": "2450",
+                  "cidade": "Campo Grande",
+                  "estado": "MS"
+                }
+                """;
+
+        mockMvc.perform(put("/api/v1/empresas/1/dados-complementares")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nomeFantasia").value("Efficientia"))
+                .andExpect(jsonPath("$.telefone").value("+55 (67) 99999-2048"))
+                .andExpect(jsonPath("$.logradouro").value("Av. Afonso Pena"))
+                .andExpect(jsonPath("$.etapaCadastro").value(2));
+    }
+
+    @Test
+    @DisplayName("Deve atualizar dados complementares por código via PUT /api/v1/empresas/codigo/{codigo}")
+    void deveAtualizarDadosComplementaresPorCodigo() throws Exception {
+        EmpresaResponse response = new EmpresaResponse(
+                1L, "EFF12345", "EFF12345", "EFF12345",
+                "Efficientia", "Efficientia", "Efficientia", "Efficientia Ltda",
+                "12345678000190", "operacao@efficientia.com.br", "operacao@efficientia.com.br",
+                "+55 67 9999-9999", null, null, null, null, null, null, null, null,
+                null, 2, false, "ATIVO", false, "PAINEL_ADMINISTRATIVO",
+                "Atualizado", Instant.now(), Instant.now()
+        );
+
+        when(empresaService.atualizarDadosComplementaresPorCodigo(eq("EFF12345"), any(AtualizarDadosEmpresaRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(put("/api/v1/empresas/codigo/EFF12345")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"telefone\": \"+55 67 9999-9999\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.codigoEmpresa").value("EFF12345"))
+                .andExpect(jsonPath("$.etapaCadastro").value(2));
+    }
+
+    @Test
+    @DisplayName("Deve fazer upload de logotipo via POST /api/v1/empresas/{id}/logo")
+    void deveFazerUploadLogotipo() throws Exception {
+        UploadLogoResponse uploadResp = new UploadLogoResponse("/api/v1/empresas/1/logo/conteudo", "Logo enviada com sucesso.", 1024L, "image/png");
+        when(empresaService.atualizarLogo(eq(1L), any())).thenReturn(uploadResp);
+
+        org.springframework.mock.web.MockMultipartFile file = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "logo.png", "image/png", new byte[]{1, 2, 3}
+        );
+
+        mockMvc.perform(multipart("/api/v1/empresas/1/logo").file(file))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.logoUrl").value("/api/v1/empresas/1/logo/conteudo"))
+                .andExpect(jsonPath("$.mimeType").value("image/png"));
+    }
+
+    @Test
+    @DisplayName("Deve obter bytes do logotipo via GET /api/v1/empresas/{id}/logo/conteudo")
+    void deveObterLogotipoConteudo() throws Exception {
+        byte[] bytes = new byte[]{10, 20, 30};
+        when(empresaService.obterConteudoLogo(1L)).thenReturn(bytes);
+        when(empresaService.obterMimeTypeLogo(1L)).thenReturn("image/png");
+
+        mockMvc.perform(get("/api/v1/empresas/1/logo/conteudo"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "image/png"))
+                .andExpect(header().string("Cache-Control", "public, max-age=86400"))
+                .andExpect(content().bytes(bytes));
     }
     @TestConfiguration(proxyBeanMethods = false)
     static class TestDependencies {
