@@ -4,11 +4,17 @@ import com.example.efficientia.auth.api.AutenticacaoInvalidaException;
 import com.example.efficientia.auth.service.JwtTokenService;
 import com.example.efficientia.cadastrobase.api.CadastroDuplicadoException;
 import com.example.efficientia.cadastrobase.api.CadastroInvalidoException;
+import com.example.efficientia.cadastrobase.persistence.EnderecoEntity;
+import com.example.efficientia.cadastrobase.persistence.EnderecoRepository;
+import com.example.efficientia.documento.storage.StorageService;
 import com.example.efficientia.empresa.api.EmpresaAdminContracts.AdminResponse;
+import com.example.efficientia.empresa.api.EmpresaContracts.AtualizarDadosEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.CriarEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.EmpresaResponse;
+import com.example.efficientia.empresa.api.EmpresaContracts.EnderecoDto;
 import com.example.efficientia.empresa.api.EmpresaContracts.LoginEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.LoginEmpresaResponse;
+import com.example.efficientia.empresa.api.EmpresaContracts.UploadLogoResponse;
 import com.example.efficientia.empresa.domain.Empresa;
 import com.example.efficientia.empresa.domain.EmpresaAdmin;
 import com.example.efficientia.empresa.persistence.EmpresaAdminRepository;
@@ -19,13 +25,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
-
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 @Service
 public class EmpresaService {
 
@@ -35,22 +48,43 @@ public class EmpresaService {
     private final EmpresaAdminRepository adminRepository;
     private final CodigoEmpresaGenerator codigoGenerator;
     private final JwtTokenService jwtTokenService;
+    private final EnderecoRepository enderecoRepository;
+    private final StorageService storageService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    private final Map<Integer, EnderecoDto> enderecosEmMemoria = new ConcurrentHashMap<>();
+    private final AtomicInteger enderecoIdSeq = new AtomicInteger(100);
+    private final Map<Long, byte[]> logosEmMemoria = new ConcurrentHashMap<>();
+    private final Map<Long, String> mimeTypesLogo = new ConcurrentHashMap<>();
 
     @Autowired
     public EmpresaService(
             EmpresaRepository repository,
             EmpresaAdminRepository adminRepository,
             CodigoEmpresaGenerator codigoGenerator,
-            JwtTokenService jwtTokenService
+            JwtTokenService jwtTokenService,
+            @Autowired(required = false) EnderecoRepository enderecoRepository,
+            @Autowired(required = false) StorageService storageService
     ) {
         this.repository = repository;
         this.adminRepository = adminRepository;
         this.codigoGenerator = codigoGenerator;
         this.jwtTokenService = jwtTokenService;
+        this.enderecoRepository = enderecoRepository;
+        this.storageService = storageService;
     }
+
+    public EmpresaService(
+            EmpresaRepository repository,
+            EmpresaAdminRepository adminRepository,
+            CodigoEmpresaGenerator codigoGenerator,
+            JwtTokenService jwtTokenService
+    ) {
+        this(repository, adminRepository, codigoGenerator, jwtTokenService, null, null);
+    }
+
     public EmpresaService(EmpresaRepository repository, CodigoEmpresaGenerator codigoGenerator) {
-        this(repository, new com.example.efficientia.empresa.persistence.InMemoryEmpresaAdminRepository(), codigoGenerator, null);
+        this(repository, new com.example.efficientia.empresa.persistence.InMemoryEmpresaAdminRepository(), codigoGenerator, null, null, null);
     }
 
     public EmpresaResponse cadastrarEmpresa(CriarEmpresaRequest request) {
@@ -87,20 +121,58 @@ public class EmpresaService {
                 : null;
         Instant agora = Instant.now();
 
+        String nomeFantasiaLimpo = request.nomeFantasia() != null && !request.nomeFantasia().isBlank()
+                ? request.nomeFantasia().trim()
+                : nomeEmpresaLimpo;
+        String telefoneLimpo = request.telefone() != null ? request.telefone().trim() : null;
+        String logoUrl = request.logoUrl() != null ? request.logoUrl().trim() : null;
+
+        Integer enderecoIdFinal = request.enderecoId();
+        if (request.endereco() != null) {
+            EnderecoDto endDto = request.endereco();
+            EnderecoDto salvo = salvarOuAtualizarEndereco(
+                    enderecoIdFinal,
+                    endDto.cep(),
+                    endDto.logradouro(),
+                    endDto.numero(),
+                    endDto.cidade(),
+                    endDto.estado() != null ? endDto.estado() : endDto.uf()
+            );
+            if (salvo != null) {
+                enderecoIdFinal = salvo.id();
+            }
+        } else if (request.cep() != null || request.logradouro() != null || request.cidade() != null) {
+            EnderecoDto salvo = salvarOuAtualizarEndereco(
+                    enderecoIdFinal,
+                    request.cep(),
+                    request.logradouro(),
+                    request.numero(),
+                    request.cidade(),
+                    request.estado()
+            );
+            if (salvo != null) {
+                enderecoIdFinal = salvo.id();
+            }
+        }
+
         Empresa empresa = new Empresa(
                 null,
-                request.enderecoId(),
+                enderecoIdFinal,
                 codigo,
                 nomeEmpresaLimpo,
+                nomeFantasiaLimpo,
                 razaoSocialLimpa,
                 cnpjLimpo,
                 emailLimpo,
+                telefoneLimpo,
+                logoUrl,
+                1,
+                false,
                 senhaHash,
                 true,
                 agora,
                 agora
         );
-
         Empresa salva = repository.salvar(empresa);
         log.info("Empresa cadastrada com sucesso: ID={}, Código={}, CNPJ={}", salva.getId(), salva.getCodigoEmpresa(), salva.getCnpj());
 
@@ -254,6 +326,227 @@ public class EmpresaService {
         return cnpj.replaceAll("[^0-9]", "");
     }
 
+    public EmpresaResponse atualizarDadosComplementares(Long empresaId, AtualizarDadosEmpresaRequest request) {
+        return atualizarDadosComplementares(empresaId, request, null);
+    }
+
+    public EmpresaResponse atualizarDadosComplementares(Long empresaId, AtualizarDadosEmpresaRequest request, Long adminLogadoId) {
+        Empresa empresa = repository.buscarPorId(empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada para o ID informado."));
+        return executarAtualizacaoDados(empresa, request);
+    }
+
+    public EmpresaResponse atualizarDadosComplementaresPorCodigo(String codigo, AtualizarDadosEmpresaRequest request) {
+        if (codigo == null || codigo.isBlank()) {
+            throw new CadastroInvalidoException("Código de empresa não informado.");
+        }
+        Empresa empresa = repository.buscarPorCodigo(codigo.trim())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada para o código informado."));
+        return executarAtualizacaoDados(empresa, request);
+    }
+
+    private EmpresaResponse executarAtualizacaoDados(Empresa empresa, AtualizarDadosEmpresaRequest request) {
+        if (request == null) {
+            return toResponse(empresa);
+        }
+
+        if (request.nomeFantasia() != null && !request.nomeFantasia().isBlank()) {
+            String nomeLimpo = request.nomeFantasia().trim();
+            empresa.setNomeFantasia(nomeLimpo);
+            empresa.setNomeEmpresa(nomeLimpo);
+        }
+
+        if (request.razaoSocial() != null && !request.razaoSocial().isBlank()) {
+            empresa.setRazaoSocial(request.razaoSocial().trim());
+        }
+
+        if (request.cnpj() != null && !request.cnpj().isBlank()) {
+            String cnpjLimpo = sanitizarCnpj(request.cnpj());
+            if (cnpjLimpo.length() != 14) {
+                throw new CadastroInvalidoException("CNPJ inválido. Deve conter 14 dígitos numéricos.");
+            }
+            if (!cnpjLimpo.equalsIgnoreCase(empresa.getCnpj())) {
+                if (repository.existePorCnpj(cnpjLimpo)) {
+                    throw new CadastroDuplicadoException("Já existe uma empresa cadastrada com o CNPJ informado.");
+                }
+                empresa.setCnpj(cnpjLimpo);
+            }
+        }
+
+        if (request.emailCorporativo() != null && !request.emailCorporativo().isBlank()) {
+            String emailLimpo = request.emailCorporativo().trim().toLowerCase(Locale.ROOT);
+            if (!emailLimpo.equalsIgnoreCase(empresa.getEmailCorporativo())) {
+                if (repository.existePorEmail(emailLimpo)) {
+                    throw new CadastroDuplicadoException("Já existe uma empresa cadastrada com o e-mail corporativo informado.");
+                }
+                empresa.setEmailCorporativo(emailLimpo);
+            }
+        }
+
+        if (request.telefone() != null && !request.telefone().isBlank()) {
+            empresa.setTelefone(request.telefone().trim());
+        }
+
+        if (request.logoUrl() != null && !request.logoUrl().isBlank()) {
+            empresa.setLogoUrl(request.logoUrl().trim());
+        }
+
+        Integer enderecoIdAtual = empresa.getEnderecoId();
+        if (request.endereco() != null) {
+            EnderecoDto endDto = request.endereco();
+            EnderecoDto salvo = salvarOuAtualizarEndereco(
+                    enderecoIdAtual,
+                    endDto.cep(),
+                    endDto.logradouro(),
+                    endDto.numero(),
+                    endDto.cidade(),
+                    endDto.estado() != null ? endDto.estado() : endDto.uf()
+            );
+            if (salvo != null) {
+                empresa.setEnderecoId(salvo.id());
+            }
+        } else if (request.cep() != null || request.logradouro() != null || request.cidade() != null || request.estado() != null || request.numero() != null) {
+            EnderecoDto salvo = salvarOuAtualizarEndereco(
+                    enderecoIdAtual,
+                    request.cep(),
+                    request.logradouro(),
+                    request.numero(),
+                    request.cidade(),
+                    request.estado()
+            );
+            if (salvo != null) {
+                empresa.setEnderecoId(salvo.id());
+            }
+        }
+
+        empresa.setEtapaCadastro(2);
+        empresa.setAtualizadoEm(Instant.now());
+
+        Empresa salva = repository.salvar(empresa);
+        log.info("Dados cadastrais complementares atualizados com sucesso: Empresa ID={}, Código={}, Telefone={}",
+                salva.getId(), salva.getCodigoEmpresa(), salva.getTelefone());
+
+        return toResponse(salva);
+    }
+
+    public UploadLogoResponse atualizarLogo(Long empresaId, MultipartFile arquivo) {
+        Empresa empresa = repository.buscarPorId(empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada para o ID informado."));
+
+        if (arquivo == null || arquivo.isEmpty()) {
+            throw new CadastroInvalidoException("O arquivo de logotipo é obrigatório.");
+        }
+
+        long maxBytes = 5L * 1024 * 1024;
+        if (arquivo.getSize() > maxBytes) {
+            throw new CadastroInvalidoException("O arquivo de logotipo excede o limite máximo permitido de 5 MB.");
+        }
+
+        String contentType = arquivo.getContentType();
+        String nomeOriginal = arquivo.getOriginalFilename() != null ? arquivo.getOriginalFilename().toLowerCase(Locale.ROOT) : "";
+        boolean isPng = "image/png".equalsIgnoreCase(contentType) || nomeOriginal.endsWith(".png");
+        boolean isSvg = "image/svg+xml".equalsIgnoreCase(contentType) || "image/svg".equalsIgnoreCase(contentType) || nomeOriginal.endsWith(".svg");
+
+        if (!isPng && !isSvg) {
+            throw new CadastroInvalidoException("Formato de arquivo inválido. Formatos aceitos: PNG ou SVG (até 5 MB).");
+        }
+
+        String mimeTypeFinal = isSvg ? "image/svg+xml" : "image/png";
+
+        try {
+            byte[] bytes = arquivo.getBytes();
+            logosEmMemoria.put(empresaId, bytes);
+            mimeTypesLogo.put(empresaId, mimeTypeFinal);
+
+            if (storageService != null) {
+                try (InputStream is = new ByteArrayInputStream(bytes)) {
+                    storageService.salvar(UUID.randomUUID(), nomeOriginal, mimeTypeFinal, is);
+                }
+            }
+        } catch (IOException e) {
+            log.error("Erro ao processar bytes do arquivo de logotipo para empresa ID {}", empresaId, e);
+            throw new CadastroInvalidoException("Falha ao processar o arquivo de logotipo enviado.");
+        }
+
+        String logoUrl = "/api/v1/empresas/" + empresaId + "/logo/conteudo";
+        empresa.setLogoUrl(logoUrl);
+        empresa.setAtualizadoEm(Instant.now());
+        repository.salvar(empresa);
+
+        log.info("Logo atualizada com sucesso para empresa ID {}: URL={}, tamanho={}", empresaId, logoUrl, arquivo.getSize());
+        return new UploadLogoResponse(logoUrl, "Logo da empresa enviada com sucesso.", arquivo.getSize(), mimeTypeFinal);
+    }
+
+    public byte[] obterConteudoLogo(Long empresaId) {
+        repository.buscarPorId(empresaId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Empresa não encontrada para o ID informado."));
+
+        byte[] bytes = logosEmMemoria.get(empresaId);
+        if (bytes == null || bytes.length == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Logotipo não encontrado para a empresa informada.");
+        }
+        return bytes;
+    }
+
+    public String obterMimeTypeLogo(Long empresaId) {
+        return mimeTypesLogo.getOrDefault(empresaId, "image/png");
+    }
+
+    private EnderecoDto salvarOuAtualizarEndereco(Integer enderecoIdExistente, String cep, String logradouro, String numero, String cidade, String estado) {
+        if ((cep == null || cep.isBlank()) && (logradouro == null || logradouro.isBlank()) && (cidade == null || cidade.isBlank())) {
+            return null;
+        }
+        String cepLimpo = cep != null ? cep.replaceAll("[^0-9]", "") : "";
+        String logradouroLimpo = logradouro != null ? logradouro.trim() : "";
+        String numeroLimpo = numero != null && !numero.isBlank() ? numero.trim() : "S/N";
+        String cidadeLimpa = cidade != null ? cidade.trim() : "";
+        String estadoLimpo = estado != null ? estado.trim().toUpperCase(Locale.ROOT) : "";
+
+        if (enderecoRepository != null) {
+            EnderecoEntity entity = null;
+            if (enderecoIdExistente != null) {
+                entity = enderecoRepository.findById(enderecoIdExistente).orElse(null);
+            }
+            if (entity == null) {
+                entity = new EnderecoEntity();
+            }
+            entity.setCep(cepLimpo);
+            entity.setLogradouro(logradouroLimpo);
+            entity.setNumero(numeroLimpo);
+            entity.setCidade(cidadeLimpa);
+            entity.setEstado(estadoLimpo.length() > 2 ? estadoLimpo.substring(0, 2) : estadoLimpo);
+            EnderecoEntity salvo = enderecoRepository.save(entity);
+            EnderecoDto dto = new EnderecoDto(salvo.getId(), salvo.getCep(), salvo.getLogradouro(), salvo.getNumero(), salvo.getCidade(), salvo.getEstado());
+            enderecosEmMemoria.put(salvo.getId(), dto);
+            return dto;
+        }
+
+        int id = enderecoIdExistente != null ? enderecoIdExistente : enderecoIdSeq.getAndIncrement();
+        EnderecoDto dto = new EnderecoDto(id, cepLimpo, logradouroLimpo, numeroLimpo, cidadeLimpa, estadoLimpo);
+        enderecosEmMemoria.put(id, dto);
+        return dto;
+    }
+
+    private EnderecoDto buscarEndereco(Integer enderecoId) {
+        if (enderecoId == null) {
+            return null;
+        }
+        EnderecoDto emMemoria = enderecosEmMemoria.get(enderecoId);
+        if (emMemoria != null) {
+            return emMemoria;
+        }
+        if (enderecoRepository != null) {
+            return enderecoRepository.findById(enderecoId)
+                    .map(e -> {
+                        EnderecoDto dto = new EnderecoDto(e.getId(), e.getCep(), e.getLogradouro(), e.getNumero(), e.getCidade(), e.getEstado());
+                        enderecosEmMemoria.put(e.getId(), dto);
+                        return dto;
+                    })
+                    .orElse(null);
+        }
+        return null;
+    }
+
     public EmpresaResponse toResponse(Empresa empresa) {
         long totalAdmins = adminRepository.contarPorEmpresaId(empresa.getId());
         boolean pendenteAdmin = totalAdmins == 0;
@@ -264,19 +557,44 @@ public class EmpresaService {
                 ? "Empresa registrada com sucesso. O cadastro do primeiro administrador é obrigatório para liberar o acesso ao sistema."
                 : "Empresa ativa e operacional.";
 
+        EnderecoDto endereco = buscarEndereco(empresa.getEnderecoId());
+        String cep = endereco != null ? endereco.cep() : null;
+        String logradouro = endereco != null ? endereco.logradouro() : null;
+        String numero = endereco != null ? endereco.numero() : null;
+        String cidade = endereco != null ? endereco.cidade() : null;
+        String estado = endereco != null ? endereco.estado() : null;
+        String uf = endereco != null ? endereco.uf() : null;
+
         return new EmpresaResponse(
                 empresa.getId(),
                 empresa.getCodigoEmpresa(),
+                empresa.getCodigoEmpresa(),
+                empresa.getCodigoEmpresa(),
                 empresa.getNomeEmpresa(),
+                empresa.getNomeEmpresa(),
+                empresa.getNomeFantasia(),
                 empresa.getRazaoSocial(),
                 empresa.getCnpj(),
                 empresa.getEmailCorporativo(),
+                empresa.getEmailCorporativo(),
+                empresa.getTelefone(),
                 empresa.getEnderecoId(),
+                endereco,
+                cep,
+                logradouro,
+                numero,
+                cidade,
+                estado,
+                uf,
+                empresa.getLogoUrl(),
+                empresa.getEtapaCadastro(),
+                empresa.getCadastroCompleto(),
                 status,
                 pendenteAdmin,
                 proximoPasso,
                 mensagem,
-                empresa.getCriadoEm()
+                empresa.getCriadoEm(),
+                empresa.getAtualizadoEm()
         );
     }
 }
