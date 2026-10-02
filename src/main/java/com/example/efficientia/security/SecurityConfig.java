@@ -84,9 +84,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/documentos/**")
                         .hasAnyRole("ANALISTA", "FUNCIONARIO_FRIBOI", "ADMIN")
                         .requestMatchers("/api/v1/relatorios-viagem/**")
-                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
-                        .requestMatchers("/api/v1/usuarios/**", "/api/v1/enderecos/**", "/api/v1/fazendas/**", "/api/v1/veiculos/**")
-                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR")
+                        .requestMatchers("/api/v1/usuarios/**", "/api/v1/enderecos/**", "/api/v1/fazendas/**", "/api/v1/veiculos/**", "/api/v1/caminhoes/**")
+                        .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(new JwtRoleConverter())))

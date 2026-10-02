@@ -1,6 +1,11 @@
 package com.example.efficientia.relatorioviagem.api;
 
 import com.example.efficientia.relatorioviagem.service.RelatorioViagemService;
+import com.example.efficientia.caminhao.service.CaminhaoService;
+import com.example.efficientia.caminhao.api.CaminhaoContracts.CaminhaoRelatorioResponse;
+import com.example.efficientia.caminhao.api.CaminhaoContracts.VincularCaminhaoRelatorioRequest;
+import static org.mockito.ArgumentMatchers.any;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +34,8 @@ class RelatorioViagemControllerTest {
 
     @Autowired
     private RelatorioViagemService service;
+    @Autowired
+    private CaminhaoService caminhaoService;
 
     @Test
     void deveListarRelatoriosComPaginacao() throws Exception {
@@ -41,6 +48,43 @@ class RelatorioViagemControllerTest {
                 .andExpect(jsonPath("$.pagina").value(0))
                 .andExpect(jsonPath("$.tamanho").value(20))
                 .andExpect(jsonPath("$.total").value(0));
+    }
+
+    @Test
+    void deveBuscarCaminhaoDoRelatorio() throws Exception {
+        CaminhaoRelatorioResponse relResponse = new CaminhaoRelatorioResponse(
+                1, "rascunho", 10, "Motorista Teste", null, null, "ABC1D23", "XYZ9W87", true
+        );
+        when(caminhaoService.buscarCaminhaoDoRelatorio(1)).thenReturn(relResponse);
+
+        mockMvc.perform(get("/api/v1/relatorios-viagem/1/caminhao"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.relatorioId").value(1))
+                .andExpect(jsonPath("$.placaCavalo").value("ABC1D23"))
+                .andExpect(jsonPath("$.placaCarreta").value("XYZ9W87"));
+    }
+
+    @Test
+    void deveVincularCaminhaoAoRelatorio() throws Exception {
+        CaminhaoRelatorioResponse relResponse = new CaminhaoRelatorioResponse(
+                1, "rascunho", 10, "Motorista Teste", null, null, "ABC1D23", "XYZ9W87", true
+        );
+        when(caminhaoService.vincularCaminhaoAoRelatorio(eq(1), any(VincularCaminhaoRelatorioRequest.class)))
+                .thenReturn(relResponse);
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem/1/vincular-caminhao")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"placaCavalo\": \"ABC1D23\", \"placaCarreta\": \"XYZ9W87\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.placaCavalo").value("ABC1D23"));
+    }
+
+    @Test
+    void deveFinalizarRelatorioViagem() throws Exception {
+        when(service.finalizar(1)).thenReturn(Mockito.mock(RelatorioViagemResponse.class));
+
+        mockMvc.perform(patch("/api/v1/relatorios-viagem/1/finalizar"))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -57,6 +101,11 @@ class RelatorioViagemControllerTest {
         @Bean
         RelatorioViagemService relatorioViagemService() {
             return Mockito.mock(RelatorioViagemService.class);
+        }
+
+        @Bean
+        CaminhaoService caminhaoService() {
+            return Mockito.mock(CaminhaoService.class);
         }
     }
 }

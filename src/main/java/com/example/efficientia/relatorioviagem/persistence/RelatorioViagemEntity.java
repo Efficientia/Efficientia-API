@@ -19,6 +19,18 @@ public class RelatorioViagemEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
+    @Column(name = "empresa_id")
+    private Integer empresaId;
+
+    @Column(name = "status", length = 20)
+    private String status = "rascunho";
+
+    @Column(name = "enviado_em")
+    private LocalDateTime enviadoEm;
+
+    @Column(name = "finalizado_em")
+    private LocalDateTime finalizadoEm;
+
     @Column(name = "fazenda_id", nullable = false)
     private Integer fazendaId;
 
@@ -119,6 +131,7 @@ public class RelatorioViagemEntity {
     }
 
     public Integer getId() { return id; }
+    public void setId(Integer id) { this.id = id; }
     public Integer getFazendaId() { return fazendaId; }
     public Integer getMotoristaId() { return motoristaId; }
     public Integer getManobristaId() { return manobristaId; }
@@ -208,4 +221,12 @@ public class RelatorioViagemEntity {
         this.urlAssinaturaCurraleiro = urlAssinaturaCurraleiro;
     }
     public void setCriadoEm(LocalDateTime criadoEm) { this.criadoEm = criadoEm; }
+    public Integer getEmpresaId() { return empresaId; }
+    public void setEmpresaId(Integer empresaId) { this.empresaId = empresaId; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public LocalDateTime getEnviadoEm() { return enviadoEm; }
+    public void setEnviadoEm(LocalDateTime enviadoEm) { this.enviadoEm = enviadoEm; }
+    public LocalDateTime getFinalizadoEm() { return finalizadoEm; }
+    public void setFinalizadoEm(LocalDateTime finalizadoEm) { this.finalizadoEm = finalizadoEm; }
 }
