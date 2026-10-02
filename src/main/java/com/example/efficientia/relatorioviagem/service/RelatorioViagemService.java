@@ -86,6 +86,30 @@ public class RelatorioViagemService {
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
     }
 
+    @Transactional
+    public RelatorioViagemResponse finalizar(Integer id) {
+        return atualizarStatus(id, "aprovado");
+    }
+
+    @Transactional
+    public RelatorioViagemResponse atualizarStatus(Integer id, String novoStatus) {
+        if (novoStatus == null || novoStatus.isBlank()) {
+            throw new IllegalArgumentException("O status nao pode ser nulo ou vazio.");
+        }
+        RelatorioViagemEntity entity = repository.findById(id)
+                .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+
+        String statusNorm = novoStatus.trim().toLowerCase();
+        entity.setStatus(statusNorm);
+        if ("aprovado".equals(statusNorm) || "concluido".equals(statusNorm) || "finalizado".equals(statusNorm)) {
+            entity.setFinalizadoEm(LocalDateTime.now());
+        } else if ("pendente".equals(statusNorm) && entity.getEnviadoEm() == null) {
+            entity.setEnviadoEm(LocalDateTime.now());
+        }
+
+        return RelatorioViagemResponse.from(repository.save(entity));
+    }
+
     private void validarRegrasDeNegocio(CriarRelatorioViagemRequest request) {
         LocalDateTime embarque = LocalDateTime.of(request.dataEmbarque(), request.horarioEmbarque());
         LocalDateTime saida = LocalDateTime.of(request.dataEmbarque(), request.horarioSaidaPropriedade());

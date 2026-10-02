@@ -18,8 +18,33 @@ public record RelatorioViagemResponse(
         Integer quantidadeDeitado, Integer quantidadeMorto, Integer quantidadeEmergencia,
         String motivoEmergencia, String comentarios, String urlAssinaturaPecuarista,
         String urlAssinaturaMotorista, String urlAssinaturaManobrista,
-        String urlAssinaturaCurraleiro, LocalDateTime criadoEm
+        String urlAssinaturaCurraleiro, LocalDateTime criadoEm,
+        String status
 ) {
+
+    public RelatorioViagemResponse(
+            Integer id, Integer fazendaId, Integer motoristaId, Integer manobristaId,
+            Integer curraleiroId, Integer cavaloId, Integer carretaId, String numeroGta,
+            String numeroNotaFiscal, LocalDate dataEmbarque, LocalTime horarioEmbarque,
+            LocalTime horarioSaidaPropriedade, Integer kmSaidaEmbarcadouro,
+            LocalDate dataChegadaUnidade, LocalTime horarioChegadaUnidade,
+            LocalTime horarioDesembarque, Integer kmChegadaDesembarcadouro,
+            String numeroCurral, Boolean sireneReFuncionou, Integer quantidadeMachos,
+            Integer quantidadeFemeas, Integer quantidadeMarrucos, Integer quantidadeEmPe,
+            Integer quantidadeDeitado, Integer quantidadeMorto, Integer quantidadeEmergencia,
+            String motivoEmergencia, String comentarios, String urlAssinaturaPecuarista,
+            String urlAssinaturaMotorista, String urlAssinaturaManobrista,
+            String urlAssinaturaCurraleiro, LocalDateTime criadoEm
+    ) {
+        this(id, fazendaId, motoristaId, manobristaId, curraleiroId, cavaloId, carretaId,
+                numeroGta, numeroNotaFiscal, dataEmbarque, horarioEmbarque, horarioSaidaPropriedade,
+                kmSaidaEmbarcadouro, dataChegadaUnidade, horarioChegadaUnidade, horarioDesembarque,
+                kmChegadaDesembarcadouro, numeroCurral, sireneReFuncionou, quantidadeMachos,
+                quantidadeFemeas, quantidadeMarrucos, quantidadeEmPe, quantidadeDeitado,
+                quantidadeMorto, quantidadeEmergencia, motivoEmergencia, comentarios,
+                urlAssinaturaPecuarista, urlAssinaturaMotorista, urlAssinaturaManobrista,
+                urlAssinaturaCurraleiro, criadoEm, "rascunho");
+    }
 
     public static RelatorioViagemResponse from(RelatorioViagemEntity entity) {
         return new RelatorioViagemResponse(
@@ -37,7 +62,8 @@ public record RelatorioViagemResponse(
                 entity.getQuantidadeEmergencia(), entity.getMotivoEmergencia(),
                 entity.getComentarios(), entity.getUrlAssinaturaPecuarista(),
                 entity.getUrlAssinaturaMotorista(), entity.getUrlAssinaturaManobrista(),
-                entity.getUrlAssinaturaCurraleiro(), entity.getCriadoEm()
+                entity.getUrlAssinaturaCurraleiro(), entity.getCriadoEm(),
+                entity.getStatus() != null ? entity.getStatus() : "rascunho"
         );
     }
 }

@@ -121,4 +121,80 @@ public final class CadastroBaseContracts {
             return new CarretaResponse(entity.getId(), entity.getPlaca(), entity.getCapacidadeCabecas());
         }
     }
+
+    public record AtualizarCavaloRequest(
+            @Pattern(regexp = "[A-Za-z]{3}[0-9][A-Za-z0-9][0-9]{2}") String placa,
+            Boolean ativo,
+            Integer empresaId,
+            LocalDate dataVencimentoInspecao,
+            Integer kmAcumulado,
+            @Size(max = 50) String marca,
+            @Size(max = 50) String modelo,
+            Integer anoFabricacao
+    ) {
+    }
+
+    public record AtualizarCarretaRequest(
+            @Pattern(regexp = "[A-Za-z]{3}[0-9][A-Za-z0-9][0-9]{2}") String placa,
+            @Positive Integer capacidadeCabecas,
+            Boolean ativo,
+            Integer empresaId,
+            LocalDate dataVencimentoInspecao,
+            @Size(max = 50) String marca,
+            @Size(max = 50) String modelo,
+            @Size(max = 50) String tipoCarreta
+    ) {
+    }
+
+    public record CavaloDetalhadoResponse(
+            Integer id,
+            String placa,
+            Boolean ativo,
+            Integer empresaId,
+            LocalDate dataVencimentoInspecao,
+            Integer kmAcumulado,
+            String marca,
+            String modelo,
+            Integer anoFabricacao
+    ) {
+        public static CavaloDetalhadoResponse from(VeiculoCavaloEntity entity) {
+            return new CavaloDetalhadoResponse(
+                    entity.getId(),
+                    entity.getPlaca(),
+                    entity.getAtivo(),
+                    entity.getEmpresaId(),
+                    entity.getDataVencimentoInspecao(),
+                    entity.getKmAcumulado(),
+                    entity.getMarca(),
+                    entity.getModelo(),
+                    entity.getAnoFabricacao()
+            );
+        }
+    }
+
+    public record CarretaDetalhadaResponse(
+            Integer id,
+            String placa,
+            Integer capacidadeCabecas,
+            Boolean ativo,
+            Integer empresaId,
+            LocalDate dataVencimentoInspecao,
+            String marca,
+            String modelo,
+            String tipoCarreta
+    ) {
+        public static CarretaDetalhadaResponse from(VeiculoCarretaEntity entity) {
+            return new CarretaDetalhadaResponse(
+                    entity.getId(),
+                    entity.getPlaca(),
+                    entity.getCapacidadeCabecas(),
+                    entity.getAtivo(),
+                    entity.getEmpresaId(),
+                    entity.getDataVencimentoInspecao(),
+                    entity.getMarca(),
+                    entity.getModelo(),
+                    entity.getTipoCarreta()
+            );
+        }
+    }
 }

@@ -210,6 +210,21 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 #### `GET /api/v1/relatorios-viagem/{id}`
 - **O que faz:** Retorna os detalhes completos de um relatório específico pelo seu ID numérico.
 
+#### `GET /api/v1/relatorios-viagem/{id}/caminhao`
+- **O que faz:** Retorna os detalhes do caminhão (cavalo mecânico e carreta/boiadeira) alocado no relatório de viagem, incluindo identificação do motorista responsável e status de uso.
+- **Resposta (200 OK):** Objeto `CaminhaoRelatorioResponse`.
+
+#### `POST /api/v1/relatorios-viagem/{id}/vincular-caminhao`
+- **O que faz:** Vincula um caminhão ao relatório informando `placaCavalo` e `placaCarreta` (ou IDs). Valida automaticamente se as inspeções veiculares estão em dia (`fn_validar_alocacao_viagem`).
+- **Corpo (JSON):** `{"placaCavalo": "ABC1D23", "placaCarreta": "XYZ9W87"}`
+
+#### `PATCH /api/v1/relatorios-viagem/{id}/finalizar`
+- **O que faz:** Finaliza o relatório de viagem (status `aprovado`), desocupando automaticamente o caminhão e a carreta para que fiquem imediatamente disponíveis para outros motoristas da frota.
+- **Resposta (200 OK):** Relatório atualizado com timestamp `finalizadoEm`.
+
+#### `PATCH /api/v1/relatorios-viagem/{id}/status?status={novoStatus}`
+- **O que faz:** Atualiza o estado da viagem no ciclo de vida (`rascunho`, `pendente`, `aprovado`, `concluido`, `reprovado`).
+
 ---
 
 ### 📄 4.5 Gerenciamento de Documentos e Anexos (`/api/v1/documentos`) (`PROTEGIDO`)
@@ -327,9 +342,47 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 #### `GET /api/v1/empresas/codigo/{codigo}` (`PÚBLICO`)
 - **O que faz:** Consulta dados públicos da empresa através do código de 8 dígitos para validação no app mobile.
 
+
 ---
 
-### 🔄 4.8 Fluxo Completo de Onboarding e Integração Web & Mobile
+### 🚛 4.8 Gestão de Frota e Caminhões (`/api/v1/caminhoes` e `/api/v1/veiculos`) (`PROTEGIDO`)
+
+Permite o cadastro e gestão independente de caminhões pelo **Portal Web** e a consulta operacional e alocação pelo **Aplicativo Mobile**.
+
+#### `POST /api/v1/caminhoes` — Cadastro de Caminhão (Web)
+- **O que faz:** Cadastra um novo veículo ou conjunto completo de caminhão.
+- **Tipos Suportados:**
+  - `CAVALO`: Cadastra o cavalo mecânico (trator/cabine). Campos: `placa`, `kmAcumulado`, `marca`, `modelo`, `anoFabricacao`, `dataVencimentoInspecao`.
+  - `CARRETA`: Cadastra o implemento / gaiola boiadeira. Campos: `placa`, `capacidadeCabecas` (obrigatório e > 0), `marca`, `modelo`, `tipoCarreta`, `dataVencimentoInspecao`.
+  - `CONJUNTO`: Cadastra simultaneamente cavalo mecânico (`placa`) e carreta (`placaCarreta`).
+
+#### `GET /api/v1/caminhoes` — Listagem Geral com Status de Alocação
+- **O que faz:** Lista todos os caminhões e carretas da empresa, indicando dinamicamente se cada veículo está `DISPONIVEL` ou `EM_USO` em algum relatório de viagem ativo, além do ID do relatório e nome do motorista em trânsito.
+- **Parâmetros Opcionais:** `?empresaId=1&ativo=true&tipo=TODOS` (`CAVALO` ou `CARRETA`).
+
+#### `GET /api/v1/caminhoes/app` — Listagem Otimizada para o Aplicativo Mobile
+- **O que faz:** Retorna a frota formatada para exibição no smartphone do motorista, com status de inspeção sanitária/mecânica (`inspecaoValida`), dias restantes para o vencimento (`diasParaVencerInspecao`) e indicador de disponibilidade.
+
+#### `GET /api/v1/caminhoes/disponiveis` — Consulta de Caminhões Livres para Viagem
+- **O que faz:** Filtra e retorna apenas caminhões ativos, com inspeção válida e que **não estejam alocados** em relatórios de viagem em andamento.
+
+#### `GET /api/v1/caminhoes/relatorio/{relatorioId}` — Caminhão do Relatório
+- **O que faz:** Retorna o cavalo mecânico e a carreta associados a um relatório específico.
+
+#### `GET /api/v1/caminhoes/motorista/{motoristaId}` — Caminhão Ativo do Motorista
+- **O que faz:** Localiza a viagem em andamento do motorista e retorna o caminhão que ele está conduzindo.
+
+#### `POST /api/v1/caminhoes/relatorio/{relatorioId}/vincular` — Alocação de Caminhão por Placa
+- **O que faz:** O motorista digita a placa do cavalo e da carreta no aplicativo mobile para atrelar o veículo ao seu relatório de transporte.
+- **Bloqueio:** Retorna `422 Unprocessable Entity` se qualquer um dos veículos estiver com inspeção vencida.
+
+#### `PUT /api/v1/caminhoes/{id}` e `DELETE /api/v1/caminhoes/{id}`
+- **O que faz:** Edição e exclusão/desativação de caminhões no portal administrativo.
+
+---
+
+### 🔄 4.9 Fluxo Completo de Onboarding, Frota e Operação Web & Mobile
+
 
 1. **Criação da Empresa (Portal Web):**
    - Usuário gestor envia razão social, nome, CNPJ e e-mail via `POST /api/v1/empresas`.

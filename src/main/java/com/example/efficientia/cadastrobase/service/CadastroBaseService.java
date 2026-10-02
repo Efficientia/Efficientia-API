@@ -23,6 +23,11 @@ import com.example.efficientia.cadastrobase.persistence.VeiculoCarretaEntity;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCarretaRepository;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCavaloEntity;
 import com.example.efficientia.cadastrobase.persistence.VeiculoCavaloRepository;
+import com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCarretaRequest;
+import com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCavaloRequest;
+import com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CarretaDetalhadaResponse;
+import com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CavaloDetalhadoResponse;
+import java.util.List;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -132,6 +137,99 @@ public class CadastroBaseService {
         entity.setPlaca(placa);
         entity.setCapacidadeCabecas(request.capacidadeCabecas());
         return CarretaResponse.from(carretaRepository.save(entity));
+    }
+
+    @Transactional(readOnly = true)
+    public List<CavaloDetalhadoResponse> listarCavalos() {
+        return cavaloRepository.findAll().stream()
+                .map(CavaloDetalhadoResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CavaloDetalhadoResponse buscarCavalo(Integer id) {
+        return cavaloRepository.findById(id)
+                .map(CavaloDetalhadoResponse::from)
+                .orElseThrow(() -> new CadastroInvalidoException("Cavalo mecânico não encontrado: " + id));
+    }
+
+    @Transactional
+    public CavaloDetalhadoResponse atualizarCavalo(Integer id, AtualizarCavaloRequest request) {
+        VeiculoCavaloEntity entity = cavaloRepository.findById(id)
+                .orElseThrow(() -> new CadastroInvalidoException("Cavalo mecânico não encontrado: " + id));
+
+        if (request.placa() != null && !request.placa().isBlank()) {
+            String placa = normalizarPlaca(request.placa());
+            if (cavaloRepository.existsByPlacaAndIdNot(placa, id)) {
+                throw new CadastroDuplicadoException("Já existe um cavalo mecânico com a placa informada.");
+            }
+            entity.setPlaca(placa);
+        }
+        if (request.ativo() != null) entity.setAtivo(request.ativo());
+        if (request.empresaId() != null) entity.setEmpresaId(request.empresaId());
+        if (request.dataVencimentoInspecao() != null) entity.setDataVencimentoInspecao(request.dataVencimentoInspecao());
+        if (request.kmAcumulado() != null) entity.setKmAcumulado(request.kmAcumulado());
+        if (request.marca() != null) entity.setMarca(request.marca());
+        if (request.modelo() != null) entity.setModelo(request.modelo());
+        if (request.anoFabricacao() != null) entity.setAnoFabricacao(request.anoFabricacao());
+
+        return CavaloDetalhadoResponse.from(cavaloRepository.save(entity));
+    }
+
+    @Transactional
+    public void removerCavalo(Integer id) {
+        VeiculoCavaloEntity entity = cavaloRepository.findById(id)
+                .orElseThrow(() -> new CadastroInvalidoException("Cavalo mecânico não encontrado: " + id));
+        cavaloRepository.delete(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<CarretaDetalhadaResponse> listarCarretas() {
+        return carretaRepository.findAll().stream()
+                .map(CarretaDetalhadaResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public CarretaDetalhadaResponse buscarCarreta(Integer id) {
+        return carretaRepository.findById(id)
+                .map(CarretaDetalhadaResponse::from)
+                .orElseThrow(() -> new CadastroInvalidoException("Carreta não encontrada: " + id));
+    }
+
+    @Transactional
+    public CarretaDetalhadaResponse atualizarCarreta(Integer id, AtualizarCarretaRequest request) {
+        VeiculoCarretaEntity entity = carretaRepository.findById(id)
+                .orElseThrow(() -> new CadastroInvalidoException("Carreta não encontrada: " + id));
+
+        if (request.placa() != null && !request.placa().isBlank()) {
+            String placa = normalizarPlaca(request.placa());
+            if (carretaRepository.existsByPlacaAndIdNot(placa, id)) {
+                throw new CadastroDuplicadoException("Já existe uma carreta com a placa informada.");
+            }
+            entity.setPlaca(placa);
+        }
+        if (request.capacidadeCabecas() != null) {
+            if (request.capacidadeCabecas() <= 0) {
+                throw new CadastroInvalidoException("Capacidade de cabeças deve ser positiva.");
+            }
+            entity.setCapacidadeCabecas(request.capacidadeCabecas());
+        }
+        if (request.ativo() != null) entity.setAtivo(request.ativo());
+        if (request.empresaId() != null) entity.setEmpresaId(request.empresaId());
+        if (request.dataVencimentoInspecao() != null) entity.setDataVencimentoInspecao(request.dataVencimentoInspecao());
+        if (request.marca() != null) entity.setMarca(request.marca());
+        if (request.modelo() != null) entity.setModelo(request.modelo());
+        if (request.tipoCarreta() != null) entity.setTipoCarreta(request.tipoCarreta());
+
+        return CarretaDetalhadaResponse.from(carretaRepository.save(entity));
+    }
+
+    @Transactional
+    public void removerCarreta(Integer id) {
+        VeiculoCarretaEntity entity = carretaRepository.findById(id)
+                .orElseThrow(() -> new CadastroInvalidoException("Carreta não encontrada: " + id));
+        carretaRepository.delete(entity);
     }
 
     private void validarIdade(LocalDate dataNascimento) {
