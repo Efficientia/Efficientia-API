@@ -192,6 +192,40 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 - `POST /api/v1/veiculos/cavalos`: Cadastra trator/cavalo mecânico (placa, modelo, frota).
 - `POST /api/v1/veiculos/carretas`: Cadastra carreta/semirreboque (placa, tipo de piso, número de eixos).
 
+
+#### 🖋️ 4.3.1 Assinatura Fixa do Motorista como Imagem PNG (`/api/v1/usuarios`) (`PROTEGIDO`)
+
+Endpoints dedicados à assinatura fixa de perfil do motorista, armazenada como imagem PNG transparente em banco (`BYTEA`) com validação de magic bytes, SHA-256 e versionamento imutável.
+
+##### `PUT /api/v1/usuarios/me/assinatura` — Cadastro / Atualização pelo próprio Motorista
+- **O que faz:** Cadastra ou substitui a assinatura fixa do motorista logado (obtido via JWT).
+- **Autenticação:** Protegida (`hasRole("ROLE_MOTORISTA")`).
+- **Headers:** `Idempotency-Key: <UUID>` (obrigatório).
+- **Formato:** `multipart/form-data` com parte `arquivo` (PNG até 1 MB) e `metadados` (JSON com `modalidade`: `DESENHO` ou `NOME_DIGITADO`, `textoOrigem`).
+- **Status:** `200 OK`, `400 Bad Request`, `401 Unauthorized`, `403 Forbidden`, `413 Payload Too Large`, `415 Unsupported Media Type`.
+
+##### `GET /api/v1/usuarios/me/assinatura` — Metadados da Assinatura do Motorista Logado
+- **O que faz:** Retorna os metadados da assinatura ativa (`id`, `usuarioId`, `modalidade`, `sha256`, `conteudoUrl`, `atualizadoEm`, `versao`).
+- **Autenticação:** Protegida (`hasRole("ROLE_MOTORISTA")`).
+- **Status:** `200 OK`, `404 Not Found` (se ainda não cadastrou).
+
+##### `GET /api/v1/usuarios/me/assinatura/conteudo` — Transmissão do PNG do Motorista Logado
+- **O que faz:** Transmite os bytes binários do PNG para exibição no app mobile.
+- **Headers de Resposta:** `Content-Type: image/png`, `Content-Disposition: inline; filename="assinatura.png"`, `Cache-Control: private, no-store`.
+- **Autenticação:** Protegida (`hasRole("ROLE_MOTORISTA")`).
+
+##### `PUT /api/v1/usuarios/{motoristaId}/assinatura` — Cadastro Administrativo Prévio
+- **O que faz:** Permite que administradores cadastrem a assinatura fixa no perfil de um motorista antes mesmo do primeiro login dele no app.
+- **Autenticação:** Protegida (`hasAnyRole("ROLE_ADMIN", "ROLE_ADMINISTRADOR")`).
+- **Status:** `200 OK`, `422 Unprocessable Entity` (se usuário alvo não for motorista).
+
+##### `GET /api/v1/usuarios/{usuarioId}/assinatura` — Consulta de Assinatura por Gestores Web
+- **O que faz:** Retorna os metadados da assinatura ativa de qualquer motorista para visualização em relatórios/formulários web.
+- **Autenticação:** Protegida (`hasAnyRole("ROLE_ADMIN", "ROLE_ADMINISTRADOR", "ROLE_ANALISTA", "ROLE_FUNCIONARIO_FRIBOI")`).
+
+##### `GET /api/v1/usuarios/{usuarioId}/assinatura/conteudo` — Transmissão de Imagem para a Web
+- **O que faz:** Transmite os bytes PNG da assinatura ativa de um motorista com cabeçalho `inline` para renderização em formulários do portal web.
+- **Autenticação:** Protegida (`hasAnyRole("ROLE_ADMIN", "ROLE_ADMINISTRADOR", "ROLE_ANALISTA", "ROLE_FUNCIONARIO_FRIBOI")`).
 ---
 
 ### 🚛 4.4 Relatórios de Viagem (`/api/v1/relatorios-viagem`) (`PROTEGIDO`)

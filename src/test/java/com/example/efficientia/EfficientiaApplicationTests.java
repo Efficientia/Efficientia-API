@@ -94,6 +94,11 @@ class EfficientiaApplicationTests {
 		}
 
 		@Bean
+		com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository assinaturaMotoristaRepository() {
+			return Mockito.mock(com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository.class);
+		}
+
+		@Bean
 		@org.springframework.context.annotation.Primary
 		com.example.efficientia.documento.storage.StorageService storageService() {
 			return Mockito.mock(com.example.efficientia.documento.storage.StorageService.class);

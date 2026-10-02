@@ -102,6 +102,9 @@ public class DocumentoEntity {
     @Column(nullable = false)
     private Long versao;
 
+    @Column(name = "assinatura_motorista_id")
+    private UUID assinaturaMotoristaId;
+
     public DocumentoEntity() {
     }
 
@@ -174,4 +177,6 @@ public class DocumentoEntity {
     public void setCriadoEm(Instant criadoEm) { this.criadoEm = criadoEm; }
     public void setAtualizadoEm(Instant atualizadoEm) { this.atualizadoEm = atualizadoEm; }
     public void setVersao(Long versao) { this.versao = versao; }
+    public UUID getAssinaturaMotoristaId() { return assinaturaMotoristaId; }
+    public void setAssinaturaMotoristaId(UUID assinaturaMotoristaId) { this.assinaturaMotoristaId = assinaturaMotoristaId; }
 }

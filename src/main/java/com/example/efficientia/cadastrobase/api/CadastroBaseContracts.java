@@ -15,6 +15,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 public final class CadastroBaseContracts {
 
@@ -42,13 +43,37 @@ public final class CadastroBaseContracts {
             LocalDate dataNascimento,
             String email,
             String telefone,
-            Boolean ativo
+            Boolean ativo,
+            Boolean assinaturaFixaCadastrada,
+            UUID assinaturaFixaId
     ) {
+        public UsuarioResponse(
+                Integer id,
+                TipoUsuario tipo,
+                String cpf,
+                String codigoInterno,
+                String nome,
+                LocalDate dataNascimento,
+                String email,
+                String telefone,
+                Boolean ativo
+        ) {
+            this(id, tipo, cpf, codigoInterno, nome, dataNascimento, email, telefone, ativo, null, null);
+        }
+
         public static UsuarioResponse from(UsuarioEntity entity) {
             return new UsuarioResponse(
                     entity.getId(), entity.getTipo(), entity.getCpf(), entity.getCodigoInterno(),
                     entity.getNome(), entity.getDataNascimento(), entity.getEmail(),
-                    entity.getTelefone(), entity.getAtivo()
+                    entity.getTelefone(), entity.getAtivo(), null, null
+            );
+        }
+
+        public static UsuarioResponse from(UsuarioEntity entity, Boolean assinaturaFixaCadastrada, UUID assinaturaFixaId) {
+            return new UsuarioResponse(
+                    entity.getId(), entity.getTipo(), entity.getCpf(), entity.getCodigoInterno(),
+                    entity.getNome(), entity.getDataNascimento(), entity.getEmail(),
+                    entity.getTelefone(), entity.getAtivo(), assinaturaFixaCadastrada, assinaturaFixaId
             );
         }
     }
