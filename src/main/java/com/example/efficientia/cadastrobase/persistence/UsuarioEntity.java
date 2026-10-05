@@ -51,6 +51,33 @@ public class UsuarioEntity {
     @Column(name = "ativo", nullable = false)
     private Boolean ativo;
 
+    @Column(name = "empresa_id")
+    private Integer empresaId;
+
+    @Column(name = "url_assinatura_geral", columnDefinition = "TEXT")
+    private String urlAssinaturaGeral;
+
+    @Column(name = "cargo", length = 150)
+    private String cargo;
+
+    @Column(name = "nivel_acesso", length = 50)
+    private String nivelAcesso;
+
+    @Column(name = "cnh_numero", length = 20)
+    private String cnhNumero;
+
+    @Column(name = "categoria_cnh", length = 5)
+    private String categoriaCnh;
+
+    @Column(name = "data_vencimento_cnh")
+    private LocalDate dataVencimentoCnh;
+
+    @Column(name = "nome_completo", length = 250)
+    private String nomeCompleto;
+
+    @Column(name = "status_cadastro", length = 20)
+    private String statusCadastro = "ativo";
+
     public UsuarioEntity() {
     }
 
@@ -75,4 +102,30 @@ public class UsuarioEntity {
     public void setTelefone(String telefone) { this.telefone = telefone; }
     public void setSenhaHash(String senhaHash) { this.senhaHash = senhaHash; }
     public void setAtivo(Boolean ativo) { this.ativo = ativo; }
+    public Integer getEmpresaId() { return empresaId; }
+    public void setEmpresaId(Integer empresaId) { this.empresaId = empresaId; }
+
+    public String getUrlAssinaturaGeral() { return urlAssinaturaGeral; }
+    public void setUrlAssinaturaGeral(String urlAssinaturaGeral) { this.urlAssinaturaGeral = urlAssinaturaGeral; }
+
+    public String getCargo() { return cargo; }
+    public void setCargo(String cargo) { this.cargo = cargo; }
+
+    public String getNivelAcesso() { return nivelAcesso; }
+    public void setNivelAcesso(String nivelAcesso) { this.nivelAcesso = nivelAcesso; }
+
+    public String getCnhNumero() { return cnhNumero; }
+    public void setCnhNumero(String cnhNumero) { this.cnhNumero = cnhNumero; }
+
+    public String getCategoriaCnh() { return categoriaCnh; }
+    public void setCategoriaCnh(String categoriaCnh) { this.categoriaCnh = categoriaCnh; }
+
+    public LocalDate getDataVencimentoCnh() { return dataVencimentoCnh; }
+    public void setDataVencimentoCnh(LocalDate dataVencimentoCnh) { this.dataVencimentoCnh = dataVencimentoCnh; }
+
+    public String getNomeCompleto() { return nomeCompleto != null ? nomeCompleto : nome; }
+    public void setNomeCompleto(String nomeCompleto) { this.nomeCompleto = nomeCompleto; }
+
+    public String getStatusCadastro() { return statusCadastro; }
+    public void setStatusCadastro(String statusCadastro) { this.statusCadastro = statusCadastro; }
 }

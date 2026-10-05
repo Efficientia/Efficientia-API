@@ -1,5 +1,7 @@
 package com.example.efficientia.auth.service;
 
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaEntity;
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository;
 import com.example.efficientia.auth.api.AuthContracts.LoginRequest;
 import com.example.efficientia.auth.api.AuthContracts.LoginResponse;
 import com.example.efficientia.auth.api.AuthContracts.SignupRequest;
@@ -18,6 +20,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -37,12 +40,15 @@ class AuthServiceTest {
     @Mock
     private JwtTokenService jwtTokenService;
 
+    @Mock
+    private AssinaturaMotoristaRepository assinaturaMotoristaRepository;
+
     private AuthService authService;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(usuarioRepository, cadastroBaseService, jwtTokenService);
+        authService = new AuthService(usuarioRepository, cadastroBaseService, jwtTokenService, assinaturaMotoristaRepository);
     }
 
     @Test
@@ -64,6 +70,34 @@ class AuthServiceTest {
         assertEquals("mocked.jwt.token", response.token());
         assertEquals("Bearer", response.tokenType());
         assertEquals("12345678901", response.usuario().cpf());
+        assertEquals(false, response.usuario().assinaturaFixaCadastrada());
+    }
+
+    @Test
+    void deveAutenticarMotoristaComAssinaturaFixaCadastrada() {
+        UsuarioEntity usuario = criarUsuarioMock();
+        UUID assinaturaId = UUID.randomUUID();
+        AssinaturaMotoristaEntity assinatura = new AssinaturaMotoristaEntity();
+        assinatura.setId(assinaturaId);
+        assinatura.setMotoristaId(1);
+        assinatura.setAtiva(true);
+
+        when(usuarioRepository.findByCpf("12345678901")).thenReturn(Optional.of(usuario));
+        when(jwtTokenService.gerarToken(usuario)).thenReturn("mocked.jwt.token");
+        when(assinaturaMotoristaRepository.findByMotoristaIdAndAtivaTrue(usuario.getId())).thenReturn(Optional.of(assinatura));
+
+        LoginRequest request = new LoginRequest(
+                "12345678901",
+                "motorista@test.com",
+                "senha123",
+                "EMP-100"
+        );
+
+        LoginResponse response = authService.autenticar(request);
+
+        assertNotNull(response);
+        assertEquals(true, response.usuario().assinaturaFixaCadastrada());
+        assertEquals(assinaturaId, response.usuario().assinaturaFixaId());
     }
 
     @Test

@@ -112,18 +112,23 @@ public class RelatorioViagemEntity {
     @Column(name = "comentarios")
     private String comentarios;
 
-    @Column(name = "url_assinatura_pecuarista", nullable = false, length = 255)
+    @Column(name = "url_assinatura_pecuarista", columnDefinition = "TEXT")
     private String urlAssinaturaPecuarista;
 
-    @Column(name = "url_assinatura_motorista", nullable = false, length = 255)
+    @Column(name = "url_assinatura_motorista", columnDefinition = "TEXT")
     private String urlAssinaturaMotorista;
 
-    @Column(name = "url_assinatura_manobrista", nullable = false, length = 255)
+    @Column(name = "url_assinatura_manobrista", columnDefinition = "TEXT")
     private String urlAssinaturaManobrista;
 
-    @Column(name = "url_assinatura_curraleiro", nullable = false, length = 255)
+    @Column(name = "url_assinatura_curraleiro", columnDefinition = "TEXT")
     private String urlAssinaturaCurraleiro;
 
+    @Column(name = "capacidade_carga_utilizada")
+    private Integer capacidadeCargaUtilizada;
+
+    @Column(name = "url_laudo_mortalidade", columnDefinition = "TEXT")
+    private String urlLaudoMortalidade;
     @Column(name = "criado_em")
     private LocalDateTime criadoEm;
 
@@ -229,4 +234,25 @@ public class RelatorioViagemEntity {
     public void setEnviadoEm(LocalDateTime enviadoEm) { this.enviadoEm = enviadoEm; }
     public LocalDateTime getFinalizadoEm() { return finalizadoEm; }
     public void setFinalizadoEm(LocalDateTime finalizadoEm) { this.finalizadoEm = finalizadoEm; }
+    public Integer getCapacidadeCargaUtilizada() { return capacidadeCargaUtilizada; }
+    public void setCapacidadeCargaUtilizada(Integer capacidadeCargaUtilizada) {
+        this.capacidadeCargaUtilizada = capacidadeCargaUtilizada;
+    }
+    public String getUrlLaudoMortalidade() { return urlLaudoMortalidade; }
+    public void setUrlLaudoMortalidade(String urlLaudoMortalidade) {
+        this.urlLaudoMortalidade = urlLaudoMortalidade;
+    }
+
+    public int contarAssinaturasPreenchidas() {
+        int count = 0;
+        if (urlAssinaturaPecuarista != null && !urlAssinaturaPecuarista.isBlank()) count++;
+        if (urlAssinaturaMotorista != null && !urlAssinaturaMotorista.isBlank()) count++;
+        if (urlAssinaturaManobrista != null && !urlAssinaturaManobrista.isBlank()) count++;
+        if (urlAssinaturaCurraleiro != null && !urlAssinaturaCurraleiro.isBlank()) count++;
+        return count;
+    }
+
+    public boolean possuiAssinaturasCompletas(int qtdObrigatoria) {
+        return contarAssinaturasPreenchidas() >= qtdObrigatoria;
+    }
 }

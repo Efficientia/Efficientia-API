@@ -15,6 +15,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 public final class CadastroBaseContracts {
 
@@ -42,13 +43,69 @@ public final class CadastroBaseContracts {
             LocalDate dataNascimento,
             String email,
             String telefone,
-            Boolean ativo
+            Boolean ativo,
+            Boolean assinaturaFixaCadastrada,
+            UUID assinaturaFixaId,
+            String urlAssinaturaGeral,
+            String cargo,
+            String nivelAcesso,
+            String cnhNumero,
+            String categoriaCnh,
+            LocalDate dataVencimentoCnh,
+            String nomeCompleto,
+            String statusCadastro
     ) {
+        public UsuarioResponse(
+                Integer id,
+                TipoUsuario tipo,
+                String cpf,
+                String codigoInterno,
+                String nome,
+                LocalDate dataNascimento,
+                String email,
+                String telefone,
+                Boolean ativo
+        ) {
+            this(id, tipo, cpf, codigoInterno, nome, dataNascimento, email, telefone, ativo, null, null, null, null, null, null, null, null, nome, "ativo");
+        }
+
+        public UsuarioResponse(
+                Integer id,
+                TipoUsuario tipo,
+                String cpf,
+                String codigoInterno,
+                String nome,
+                LocalDate dataNascimento,
+                String email,
+                String telefone,
+                Boolean ativo,
+                Boolean assinaturaFixaCadastrada,
+                UUID assinaturaFixaId
+        ) {
+            this(id, tipo, cpf, codigoInterno, nome, dataNascimento, email, telefone, ativo, assinaturaFixaCadastrada, assinaturaFixaId, null, null, null, null, null, null, nome, "ativo");
+        }
+
         public static UsuarioResponse from(UsuarioEntity entity) {
+            Boolean temAssinatura = entity.getUrlAssinaturaGeral() != null;
             return new UsuarioResponse(
                     entity.getId(), entity.getTipo(), entity.getCpf(), entity.getCodigoInterno(),
                     entity.getNome(), entity.getDataNascimento(), entity.getEmail(),
-                    entity.getTelefone(), entity.getAtivo()
+                    entity.getTelefone(), entity.getAtivo(), temAssinatura, null,
+                    entity.getUrlAssinaturaGeral(), entity.getCargo(), entity.getNivelAcesso(),
+                    entity.getCnhNumero(), entity.getCategoriaCnh(), entity.getDataVencimentoCnh(),
+                    entity.getNomeCompleto(), entity.getStatusCadastro()
+            );
+        }
+
+        public static UsuarioResponse from(UsuarioEntity entity, Boolean assinaturaFixaCadastrada, UUID assinaturaFixaId) {
+            Boolean temAssinatura = assinaturaFixaCadastrada != null ? assinaturaFixaCadastrada : (entity.getUrlAssinaturaGeral() != null);
+            return new UsuarioResponse(
+                    entity.getId(), entity.getTipo(), entity.getCpf(), entity.getCodigoInterno(),
+                    entity.getNome(), entity.getDataNascimento(), entity.getEmail(),
+                    entity.getTelefone(), entity.getAtivo(), temAssinatura, assinaturaFixaId,
+                    entity.getUrlAssinaturaGeral(), entity.getCargo(), entity.getNivelAcesso(),
+                    entity.getCnhNumero(), entity.getCategoriaCnh(), entity.getDataVencimentoCnh(),
+                    entity.getNomeCompleto(), entity.getStatusCadastro()
             );
         }
     }

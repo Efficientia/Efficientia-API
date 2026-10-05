@@ -73,6 +73,28 @@ public class RelatorioViagemController {
         return service.atualizarStatus(id, status);
     }
 
+    @PatchMapping("/{id}/assinaturas")
+    public RelatorioViagemResponse registrarAssinaturas(
+            @PathVariable Integer id,
+            @RequestBody RegistrarAssinaturasRequest request
+    ) {
+        return service.registrarAssinaturas(id, request);
+    }
+
+    @PostMapping("/{id}/assinar-papel")
+    public RelatorioViagemResponse registrarAssinaturaPapel(
+            @PathVariable Integer id,
+            @RequestParam String papel,
+            @RequestParam(required = false) String urlAssinatura
+    ) {
+        return service.registrarAssinaturaPapel(id, papel, urlAssinatura);
+    }
+
+    @PatchMapping("/{id}/enviar")
+    public RelatorioViagemResponse enviarParaAnalise(@PathVariable Integer id) {
+        return service.enviarParaAnalise(id);
+    }
+
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(RelatorioViagemNotFoundException.class)
     public void relatorioNaoEncontrado() {
@@ -86,5 +108,19 @@ public class RelatorioViagemController {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(IllegalArgumentException.class)
     public void paginacaoInvalida() {
+    }
+
+    @ExceptionHandler(AssinaturasIncompletasException.class)
+    public org.springframework.http.ProblemDetail assinaturasIncompletas(AssinaturasIncompletasException ex) {
+        org.springframework.http.ProblemDetail problem = org.springframework.http.ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY,
+                ex.getMessage()
+        );
+        problem.setTitle("Assinaturas Obrigatórias Incompletas");
+        problem.setProperty("relatorioId", ex.getRelatorioId());
+        problem.setProperty("qtdObrigatoria", ex.getQtdObrigatoria());
+        problem.setProperty("qtdColetadas", ex.getQtdColetadas());
+        problem.setProperty("papeisFaltantes", ex.getPapeisFaltantes());
+        return problem;
     }
 }

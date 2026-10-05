@@ -1,5 +1,7 @@
 package com.example.efficientia.auth.service;
 
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaEntity;
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository;
 import com.example.efficientia.auth.api.AuthContracts.LoginRequest;
 import com.example.efficientia.auth.api.AuthContracts.LoginResponse;
 import com.example.efficientia.auth.api.AuthContracts.SignupRequest;
@@ -11,12 +13,16 @@ import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import com.example.efficientia.cadastrobase.service.CadastroBaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.efficientia.cadastrobase.domain.TipoUsuario;
+
 import java.util.Locale;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -26,6 +32,7 @@ public class AuthService {
     private final UsuarioRepository usuarioRepository;
     private final CadastroBaseService cadastroBaseService;
     private final JwtTokenService jwtTokenService;
+    private final AssinaturaMotoristaRepository assinaturaMotoristaRepository;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public AuthService(
@@ -33,9 +40,20 @@ public class AuthService {
             CadastroBaseService cadastroBaseService,
             JwtTokenService jwtTokenService
     ) {
+        this(usuarioRepository, cadastroBaseService, jwtTokenService, null);
+    }
+
+    @Autowired
+    public AuthService(
+            UsuarioRepository usuarioRepository,
+            CadastroBaseService cadastroBaseService,
+            JwtTokenService jwtTokenService,
+            AssinaturaMotoristaRepository assinaturaMotoristaRepository
+    ) {
         this.usuarioRepository = usuarioRepository;
         this.cadastroBaseService = cadastroBaseService;
         this.jwtTokenService = jwtTokenService;
+        this.assinaturaMotoristaRepository = assinaturaMotoristaRepository;
     }
 
     @Transactional
@@ -99,6 +117,26 @@ public class AuthService {
         }
 
         String token = jwtTokenService.gerarToken(usuario);
-        return new LoginResponse(token, UsuarioResponse.from(usuario));
+
+        Boolean assinaturaFixaCadastrada = null;
+        UUID assinaturaFixaId = null;
+
+        if (usuario.getTipo() == TipoUsuario.motorista && assinaturaMotoristaRepository != null) {
+            Optional<AssinaturaMotoristaEntity> assinaturaOpt = assinaturaMotoristaRepository.findByMotoristaIdAndAtivaTrue(usuario.getId());
+            if (assinaturaOpt.isPresent()) {
+                assinaturaFixaCadastrada = true;
+                assinaturaFixaId = assinaturaOpt.get().getId();
+                if (usuario.getUrlAssinaturaGeral() == null) {
+                    usuario.setUrlAssinaturaGeral("/api/v1/usuarios/me/assinatura/conteudo");
+                }
+            } else {
+                assinaturaFixaCadastrada = false;
+                assinaturaFixaId = null;
+            }
+        } else if (usuario.getUrlAssinaturaGeral() != null) {
+            assinaturaFixaCadastrada = true;
+        }
+        UsuarioResponse usuarioResponse = UsuarioResponse.from(usuario, assinaturaFixaCadastrada, assinaturaFixaId);
+        return new LoginResponse(token, usuarioResponse);
     }
 }
