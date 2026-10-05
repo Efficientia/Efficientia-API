@@ -38,7 +38,7 @@ public class JwtTokenService {
 
             String roleName = usuario.getTipo().name().toUpperCase();
 
-            JWTClaimsSet claimsSet = new JWTClaimsSet.Builder()
+            JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                     .subject(String.valueOf(usuario.getId()))
                     .issuer("efficientia-api")
                     .audience(List.of("efficientia-api"))
@@ -49,8 +49,13 @@ public class JwtTokenService {
                     .claim("email", usuario.getEmail())
                     .claim("cpf", usuario.getCpf())
                     .claim("codigo_interno", usuario.getCodigoInterno())
-                    .claim("roles", List.of(roleName))
-                    .build();
+                    .claim("roles", List.of(roleName));
+
+            if (usuario.getEmpresaId() != null) {
+                claimsBuilder.claim("empresa_id", usuario.getEmpresaId());
+            }
+
+            JWTClaimsSet claimsSet = claimsBuilder.build();
 
             JWSSigner signer = new MACSigner(secret.getBytes(StandardCharsets.UTF_8));
             SignedJWT signedJWT = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256), claimsSet);

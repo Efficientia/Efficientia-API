@@ -223,3 +223,9 @@ Ao ser finalizado, o relatório atualiza `finalizado_em` e `status = 'aprovado'`
 | **CA-06** | Ciclo de Vida do Caminhão | Caminhão fica `EM_USO` durante a vigência do relatório e retorna a `DISPONIVEL` após a finalização da viagem. | **Aprovado (100%)** |
 | **CA-07** | Consulta Caminhão do Motorista | Endpoint `/api/v1/caminhoes/motorista/{id}` recupera a alocação ativa do motorista. | **Aprovado (100%)** |
 | **CA-08** | Suíte de Testes e CI/CD | 266 testes automatizados executados e aprovados (0 falhas, 0 erros). Cobertura JaCoCo e migrações Flyway validadas. | **Aprovado (100%)** |
+
+## 6. Nota de implantação no Render (Flyway V7)
+
+O log recebido em 02/10/2026 mostra a inicialização interrompida porque `public.veiculo_cavalo` não existia quando a migração V7 tentou alterá-la. A V7 versionada neste projeto começa criando, com `IF NOT EXISTS`, as tabelas `public.veiculo_cavalo`, `public.veiculo_carreta` e `public.relatorio_viagem` antes de adicionar colunas e índices. Isso cobre bancos vazios e bancos que passaram por baseline parcial.
+
+Para que a correção seja usada, o serviço do Render precisa construir a branch/commit que contém essa V7. O erro é de migração de banco, não de porta ou compilação do serviço. Após novo deploy, conferir o início completo da migração V7 nos logs; se o log ainda reportar ausência da relação na linha 5, o Render está executando um artefato anterior ao arquivo versionado atual. Não editar uma migração já aplicada no banco remoto nem apagar dados para contornar esse erro.

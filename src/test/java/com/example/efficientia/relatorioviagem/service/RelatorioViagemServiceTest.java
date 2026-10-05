@@ -8,6 +8,15 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import com.example.efficientia.relatorioviagem.api.AnomaliaItemDto;
+import com.example.efficientia.relatorioviagem.api.ParadaImprevistaDto;
+import com.example.efficientia.relatorioviagem.api.ValidacaoDiarioRotaException;
+import com.example.efficientia.relatorioviagem.persistence.AnomaliaDesembarqueRepository;
+import com.example.efficientia.relatorioviagem.persistence.AnomaliaEmbarqueRepository;
+import com.example.efficientia.relatorioviagem.persistence.ParadaImprevistaRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -118,6 +127,114 @@ class RelatorioViagemServiceTest {
         assertEquals("url-motorista", response.urlAssinaturaMotorista());
         assertEquals("url-manobrista-nova", response.urlAssinaturaManobrista());
         assertEquals(3, response.totalAssinaturasColetadas());
+    }
+
+    @Test
+    void deveRejeitarHorarioSaidaAnteriorAoEmbarque() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+
+        var requestInvalido = new CriarRelatorioViagemRequest(
+                1, null, 2, 3, 4, 5, 6, null, null,
+                "GTA-INVALIDA", "NF-1",
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(10, 0),
+                LocalTime.of(9, 0), // saída anterior ao embarque
+                100,
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(12, 0),
+                LocalTime.of(12, 30),
+                200, "C1", true, 10, 0, 0, 10, 0, 0, 0,
+                null, null, null, null, null, null, null, null, "pendente", null, null, null
+        );
+
+        assertThrows(ValidacaoDiarioRotaException.class, () -> service.criar(requestInvalido));
+    }
+
+    @Test
+    void deveRejeitarKmChegadaInferiorAoKmSaida() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+
+        var requestInvalido = new CriarRelatorioViagemRequest(
+                1, null, 2, 3, 4, 5, 6, null, null,
+                "GTA-INVALIDA", "NF-1",
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(8, 0),
+                LocalTime.of(8, 30),
+                300, // saída 300
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(12, 0),
+                LocalTime.of(12, 30),
+                200, // chegada 200 (menor)
+                "C1", true, 10, 0, 0, 10, 0, 0, 0,
+                null, null, null, null, null, null, null, null, "pendente", null, null, null
+        );
+
+        assertThrows(ValidacaoDiarioRotaException.class, () -> service.criar(requestInvalido));
+    }
+
+    @Test
+    void deveSalvarParadasImprevistasEAnomaliasComSucesso() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        ParadaImprevistaRepository paradaRepo = mock(ParadaImprevistaRepository.class);
+        AnomaliaEmbarqueRepository anomaliaEmbRepo = mock(AnomaliaEmbarqueRepository.class);
+        AnomaliaDesembarqueRepository anomaliaDesembRepo = mock(AnomaliaDesembarqueRepository.class);
+
+        RelatorioViagemService service = new RelatorioViagemService(
+                repository, null, null, paradaRepo, anomaliaEmbRepo, anomaliaDesembRepo
+        );
+
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> {
+            RelatorioViagemEntity e = i.getArgument(0);
+            e.setId(10);
+            return e;
+        });
+
+        var request = new CriarRelatorioViagemRequest(
+                1, 20, 2, 3, 4, 5, 6, "ABC1D23", "XYZ9W87",
+                "GTA-COMPLETA", "NF-10",
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(8, 0),
+                LocalTime.of(8, 30),
+                100,
+                LocalDate.of(2026, 8, 20),
+                LocalTime.of(12, 0),
+                LocalTime.of(12, 30),
+                200, "C1", true, 10, 5, 2, 17, 0, 0, 0,
+                null, "Sem incidentes", null, null, null, null, null, null, "rascunho",
+                List.of(new ParadaImprevistaDto(null, "Pneu furado", LocalDateTime.of(2026, 8, 20, 9, 0), LocalDateTime.of(2026, 8, 20, 9, 30))),
+                List.of(new AnomaliaItemDto(null, "mancando", "boi mancando", 1)),
+                List.of(new AnomaliaItemDto(null, "outros_atos_abuso", "nenhum", 0))
+        );
+
+        var response = service.criar(request);
+
+        assertEquals("GTA-COMPLETA", response.numeroGta());
+        assertEquals(17, response.totalAnimais());
+        assertEquals(100, response.distanciaPercorridaKm());
+        verify(paradaRepo).save(any());
+        verify(anomaliaEmbRepo).save(any());
+        verify(anomaliaDesembRepo).save(any());
+    }
+
+    @Test
+    void deveRespeitarIdempotencyKeyRetornandoRelatorioExistente() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        UUID key = UUID.randomUUID();
+
+        RelatorioViagemEntity existente = new RelatorioViagemEntity();
+        existente.setId(55);
+        existente.setNumeroGta("GTA-EXISTENTE");
+
+        when(repository.findByIdempotencyKey(key)).thenReturn(java.util.Optional.of(existente));
+
+        var response = service.criar(requestValido(), null, key);
+
+        assertEquals(55, response.id());
+        assertEquals("GTA-EXISTENTE", response.numeroGta());
+        verify(repository, never()).save(any());
     }
     private CriarRelatorioViagemRequest requestValido() {
         return new CriarRelatorioViagemRequest(

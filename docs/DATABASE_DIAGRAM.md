@@ -95,7 +95,10 @@ erDiagram
 
     relatorio_viagem {
         int id PK
+        int empresa_id FK
+        varchar20 status
         int fazenda_id FK
+        int unidade_frigorifica_id FK
         int motorista_id FK
         int manobrista_id FK
         int curraleiro_id FK
@@ -126,7 +129,11 @@ erDiagram
         varchar255 url_assinatura_motorista
         varchar255 url_assinatura_manobrista
         varchar255 url_assinatura_curraleiro
+        uuid idempotency_key UK
         timestamp criado_em
+        timestamp atualizado_em
+        timestamp enviado_em
+        timestamp finalizado_em
     }
 
     parada_imprevista {
@@ -142,6 +149,7 @@ erDiagram
         int relatorio_id FK
         anomalia_embarque anomalia
         varchar150 descricao_outros
+        int quantidade_animais
     }
 
     anomalia_desembarque {
@@ -149,6 +157,7 @@ erDiagram
         int relatorio_id FK
         anomalia_desembarque anomalia
         varchar150 descricao_outros
+        int quantidade_animais
     }
 
     auditoria_analise {
@@ -174,6 +183,12 @@ erDiagram
     relatorio_viagem ||--o{ auditoria_analise : ""
     usuario ||--o{ auditoria_analise : "analista"
 ```
+
+### Diário de rota (integração mobile)
+
+O relatório mantém o ciclo `rascunho` → `pendente` → `aprovado`/`reprovado`. A API persiste `unidade_frigorifica_id`, status, horários de auditoria e chave de idempotência junto ao relatório. A duração em minutos e a distância em quilômetros são calculadas pelo servidor a partir dos horários e odômetros válidos.
+
+Paradas imprevistas persistem motivo e início/fim. Anomalias de embarque e desembarque guardam código, descrição livre e quantidade de animais envolvidos. A referência da assinatura fixa do motorista é copiada ao relatório no momento da criação e permanece como fotografia daquele lançamento.
 
 ---
 
