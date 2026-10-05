@@ -38,18 +38,18 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_assinatura_motorista_ativa
 CREATE INDEX IF NOT EXISTS idx_assinatura_motorista_idempotency
     ON public.assinatura_motorista(idempotency_key);
 
-ALTER TABLE public.documento
-    ADD COLUMN IF NOT EXISTS assinatura_motorista_id UUID NULL;
-
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'fk_documento_assinatura_motorista'
-    ) THEN
-        ALTER TABLE public.documento
-            ADD CONSTRAINT fk_documento_assinatura_motorista
-            FOREIGN KEY (assinatura_motorista_id)
-            REFERENCES public.assinatura_motorista(id)
-            ON DELETE RESTRICT;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'documento') THEN
+        ALTER TABLE public.documento ADD COLUMN IF NOT EXISTS assinatura_motorista_id UUID NULL;
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'fk_documento_assinatura_motorista'
+        ) THEN
+            ALTER TABLE public.documento
+                ADD CONSTRAINT fk_documento_assinatura_motorista
+                FOREIGN KEY (assinatura_motorista_id)
+                REFERENCES public.assinatura_motorista(id)
+                ON DELETE RESTRICT;
+        END IF;
     END IF;
 END $$;

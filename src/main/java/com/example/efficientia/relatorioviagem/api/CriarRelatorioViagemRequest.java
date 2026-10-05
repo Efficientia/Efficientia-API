@@ -37,9 +37,32 @@ public record CriarRelatorioViagemRequest(
         @NotNull @PositiveOrZero Integer quantidadeEmergencia,
         @Size(max = 255) String motivoEmergencia,
         String comentarios,
-        @NotBlank @Size(max = 255) String urlAssinaturaPecuarista,
-        @NotBlank @Size(max = 255) String urlAssinaturaMotorista,
-        @NotBlank @Size(max = 255) String urlAssinaturaManobrista,
-        @NotBlank @Size(max = 255) String urlAssinaturaCurraleiro
+        String urlAssinaturaPecuarista,
+        String urlAssinaturaMotorista,
+        String urlAssinaturaManobrista,
+        String urlAssinaturaCurraleiro,
+        Integer capacidadeCargaUtilizada,
+        String urlLaudoMortalidade
 ) {
+    public CriarRelatorioViagemRequest(
+            Integer fazendaId, Integer motoristaId, Integer manobristaId, Integer curraleiroId,
+            Integer cavaloId, Integer carretaId, String numeroGta, String numeroNotaFiscal,
+            LocalDate dataEmbarque, LocalTime horarioEmbarque, LocalTime horarioSaidaPropriedade,
+            Integer kmSaidaEmbarcadouro, LocalDate dataChegadaUnidade, LocalTime horarioChegadaUnidade,
+            LocalTime horarioDesembarque, Integer kmChegadaDesembarcadouro, String numeroCurral,
+            Boolean sireneReFuncionou, Integer quantidadeMachos, Integer quantidadeFemeas,
+            Integer quantidadeMarrucos, Integer quantidadeEmPe, Integer quantidadeDeitado,
+            Integer quantidadeMorto, Integer quantidadeEmergencia, String motivoEmergencia,
+            String comentarios, String urlAssinaturaPecuarista, String urlAssinaturaMotorista,
+            String urlAssinaturaManobrista, String urlAssinaturaCurraleiro
+    ) {
+        this(fazendaId, motoristaId, manobristaId, curraleiroId, cavaloId, carretaId,
+                numeroGta, numeroNotaFiscal, dataEmbarque, horarioEmbarque, horarioSaidaPropriedade,
+                kmSaidaEmbarcadouro, dataChegadaUnidade, horarioChegadaUnidade, horarioDesembarque,
+                kmChegadaDesembarcadouro, numeroCurral, sireneReFuncionou, quantidadeMachos,
+                quantidadeFemeas, quantidadeMarrucos, quantidadeEmPe, quantidadeDeitado,
+                quantidadeMorto, quantidadeEmergencia, motivoEmergencia, comentarios,
+                urlAssinaturaPecuarista, urlAssinaturaMotorista, urlAssinaturaManobrista,
+                urlAssinaturaCurraleiro, null, null);
+    }
 }

@@ -8,6 +8,8 @@ import com.example.efficientia.documento.api.DocumentoResponse;
 import com.example.efficientia.documento.api.DocumentoListagemRequest;
 import com.example.efficientia.documento.api.PaginaDocumentosResponse;
 import com.example.efficientia.documento.domain.DocumentoCursor;
+import com.example.efficientia.documento.domain.PapelAssinante;
+import com.example.efficientia.documento.domain.TipoDocumento;
 import com.example.efficientia.documento.audit.DocumentoAuditEntity;
 import com.example.efficientia.documento.audit.DocumentoAuditOperation;
 import com.example.efficientia.documento.audit.DocumentoAuditRepository;
@@ -36,11 +38,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
 import java.io.IOException;
+import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.io.InputStream;
 import java.util.UUID;
 import java.util.List;
 import java.util.Set;
-
 @Service
 public class DocumentoService {
 
@@ -52,6 +56,7 @@ public class DocumentoService {
     private final DocumentoMapper mapper;
     private final DocumentoAuditRepository auditRepository;
     private final DocumentoAccessPolicy accessPolicy;
+    private RelatorioViagemRepository relatorioViagemRepository;
 
     public DocumentoService(
             DocumentoRepository repository,
@@ -73,6 +78,21 @@ public class DocumentoService {
         this.accessPolicy = accessPolicy;
     }
 
+    @Autowired
+    public DocumentoService(
+            DocumentoRepository repository,
+            StorageService storage,
+            ArquivoValidator arquivoValidator,
+            AssinaturaValidator assinaturaValidator,
+            DocumentoCursorCodec cursorCodec,
+            DocumentoMapper mapper,
+            DocumentoAuditRepository auditRepository,
+            DocumentoAccessPolicy accessPolicy,
+            @Autowired(required = false) RelatorioViagemRepository relatorioViagemRepository
+    ) {
+        this(repository, storage, arquivoValidator, assinaturaValidator, cursorCodec, mapper, auditRepository, accessPolicy);
+        this.relatorioViagemRepository = relatorioViagemRepository;
+    }
     @Transactional
     public DocumentoResponse criarComArquivo(
             DocumentoMetadataRequest request,
@@ -225,7 +245,9 @@ public class DocumentoService {
 
         DocumentoEntity entity = montarEntidade(documentoId, request, idempotencyKey, armazenado);
         try {
-            return mapper.paraResponse(repository.saveAndFlush(entity));
+            DocumentoEntity salva = repository.saveAndFlush(entity);
+            vincularAoRelatorioViagemSeAssinatura(salva);
+            return mapper.paraResponse(salva);
         } catch (RuntimeException exception) {
             compensarStorage(armazenado.storageKey(), exception);
             throw exception;
@@ -266,7 +288,9 @@ public class DocumentoService {
         entity.setDescricao(request.descricao());
         entity.setIdempotencyKey(idempotencyKey);
         accessPolicy.usuarioAtualId().ifPresent(entity::setCriadoPor);
-        return mapper.paraResponse(repository.saveAndFlush(entity));
+        DocumentoEntity salva = repository.saveAndFlush(entity);
+        vincularAoRelatorioViagemSeAssinatura(salva);
+        return mapper.paraResponse(salva);
     }
 
     private DocumentoEntity montarEntidade(
@@ -429,5 +453,26 @@ public class DocumentoService {
             throw new DocumentoInvalidoException("Direção de ordenação inválida.");
         }
         return Sort.by(direction, partes[0]);
+    }
+
+    private void vincularAoRelatorioViagemSeAssinatura(DocumentoEntity documento) {
+        if (relatorioViagemRepository == null || documento == null) {
+            return;
+        }
+        if (documento.getTipoDocumento() == TipoDocumento.ASSINATURA
+                && documento.getViagemId() != null
+                && documento.getPapelAssinante() != null) {
+            relatorioViagemRepository.findById(documento.getViagemId()).ifPresent(relatorio -> {
+                String url = "/api/v1/documentos/" + documento.getId() + "/conteudo";
+                if (documento.getPapelAssinante() == PapelAssinante.MOTORISTA) {
+                    relatorio.setUrlAssinaturaMotorista(url);
+                } else if (documento.getPapelAssinante() == PapelAssinante.MANOBRISTA) {
+                    relatorio.setUrlAssinaturaManobrista(url);
+                } else if (documento.getPapelAssinante() == PapelAssinante.CURRALEIRO) {
+                    relatorio.setUrlAssinaturaCurraleiro(url);
+                }
+                relatorioViagemRepository.save(relatorio);
+            });
+        }
     }
 }

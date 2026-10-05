@@ -126,12 +126,16 @@ public class AuthService {
             if (assinaturaOpt.isPresent()) {
                 assinaturaFixaCadastrada = true;
                 assinaturaFixaId = assinaturaOpt.get().getId();
+                if (usuario.getUrlAssinaturaGeral() == null) {
+                    usuario.setUrlAssinaturaGeral("/api/v1/usuarios/me/assinatura/conteudo");
+                }
             } else {
                 assinaturaFixaCadastrada = false;
                 assinaturaFixaId = null;
             }
+        } else if (usuario.getUrlAssinaturaGeral() != null) {
+            assinaturaFixaCadastrada = true;
         }
-
         UsuarioResponse usuarioResponse = UsuarioResponse.from(usuario, assinaturaFixaCadastrada, assinaturaFixaId);
         return new LoginResponse(token, usuarioResponse);
     }

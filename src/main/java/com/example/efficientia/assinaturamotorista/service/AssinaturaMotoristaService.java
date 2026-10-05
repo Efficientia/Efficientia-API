@@ -96,6 +96,13 @@ public class AssinaturaMotoristaService {
         nova.setVersao(proximaVersao);
 
         AssinaturaMotoristaEntity salva = assinaturaRepository.save(nova);
+
+        String conteudoUrl = isMe
+                ? "/api/v1/usuarios/me/assinatura/conteudo"
+                : "/api/v1/usuarios/" + motoristaId + "/assinatura/conteudo";
+        motorista.setUrlAssinaturaGeral(conteudoUrl);
+        usuarioRepository.save(motorista);
+
         return AssinaturaMotoristaResponse.fromEntity(salva, isMe);
     }
 

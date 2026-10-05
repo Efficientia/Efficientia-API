@@ -47,6 +47,78 @@ class RelatorioViagemServiceTest {
         verify(repository, never()).save(any(RelatorioViagemEntity.class));
     }
 
+    @Test
+    void deveLancarExcecaoAoFinalizarSemAssinaturasSuficientes() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+
+        RelatorioViagemEntity entity = new RelatorioViagemEntity();
+        entity.setId(1);
+        entity.setUrlAssinaturaMotorista("url-motorista");
+        // apenas 1 de 4 assinaturas
+
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+
+        com.example.efficientia.relatorioviagem.api.AssinaturasIncompletasException ex = assertThrows(
+                com.example.efficientia.relatorioviagem.api.AssinaturasIncompletasException.class,
+                () -> service.finalizar(1)
+        );
+
+        assertEquals(1, ex.getRelatorioId());
+        assertEquals(4, ex.getQtdObrigatoria());
+        assertEquals(1, ex.getQtdColetadas());
+        assertEquals(3, ex.getPapeisFaltantes().size());
+    }
+
+    @Test
+    void deveFinalizarComSucessoQuandoPossuiTodasAssinaturas() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+
+        RelatorioViagemEntity entity = new RelatorioViagemEntity();
+        entity.setId(1);
+        entity.setUrlAssinaturaPecuarista("url-pecuarista");
+        entity.setUrlAssinaturaMotorista("url-motorista");
+        entity.setUrlAssinaturaManobrista("url-manobrista");
+        entity.setUrlAssinaturaCurraleiro("url-curraleiro");
+
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.finalizar(1);
+
+        assertEquals("aprovado", response.status());
+        assertEquals(4, response.totalAssinaturasColetadas());
+        assertEquals(true, response.assinaturasCompletas());
+    }
+
+    @Test
+    void deveRegistrarAssinaturasProgressivamente() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+
+        RelatorioViagemEntity entity = new RelatorioViagemEntity();
+        entity.setId(1);
+        entity.setUrlAssinaturaMotorista("url-motorista");
+
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var request = new com.example.efficientia.relatorioviagem.api.RegistrarAssinaturasRequest(
+                "url-pecuarista-nova",
+                null,
+                "url-manobrista-nova",
+                null,
+                false
+        );
+
+        var response = service.registrarAssinaturas(1, request);
+
+        assertEquals("url-pecuarista-nova", response.urlAssinaturaPecuarista());
+        assertEquals("url-motorista", response.urlAssinaturaMotorista());
+        assertEquals("url-manobrista-nova", response.urlAssinaturaManobrista());
+        assertEquals(3, response.totalAssinaturasColetadas());
+    }
     private CriarRelatorioViagemRequest requestValido() {
         return new CriarRelatorioViagemRequest(
                 1, 2, 3, 4, 5, 6,

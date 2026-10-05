@@ -37,6 +37,11 @@ class RelatorioViagemControllerTest {
     @Autowired
     private CaminhaoService caminhaoService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        Mockito.reset(service, caminhaoService);
+    }
+
     @Test
     void deveListarRelatoriosComPaginacao() throws Exception {
         when(service.listar(eq(0), eq(20)))
@@ -85,6 +90,43 @@ class RelatorioViagemControllerTest {
 
         mockMvc.perform(patch("/api/v1/relatorios-viagem/1/finalizar"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void deveRegistrarAssinaturasComSucesso() throws Exception {
+        when(service.registrarAssinaturas(eq(1), any(RegistrarAssinaturasRequest.class)))
+                .thenReturn(Mockito.mock(RelatorioViagemResponse.class));
+
+        mockMvc.perform(patch("/api/v1/relatorios-viagem/1/assinaturas")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"urlAssinaturaPecuarista\": \"https://storage/pecuarista.png\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void deveRegistrarAssinaturaPapelComSucesso() throws Exception {
+        when(service.registrarAssinaturaPapel(eq(1), eq("MOTORISTA"), any()))
+                .thenReturn(Mockito.mock(RelatorioViagemResponse.class));
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem/1/assinar-papel")
+                        .param("papel", "MOTORISTA")
+                        .param("urlAssinatura", "https://storage/motorista.png"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void deveRetornar422QuandoAssinaturasIncompletasAoFinalizar() throws Exception {
+        when(service.finalizar(1))
+                .thenThrow(new AssinaturasIncompletasException(1, 4, 2, List.of("Manobrista", "Curraleiro")));
+
+        mockMvc.perform(patch("/api/v1/relatorios-viagem/1/finalizar"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.title").value("Assinaturas Obrigatórias Incompletas"))
+                .andExpect(jsonPath("$.relatorioId").value(1))
+                .andExpect(jsonPath("$.qtdObrigatoria").value(4))
+                .andExpect(jsonPath("$.qtdColetadas").value(2))
+                .andExpect(jsonPath("$.papeisFaltantes[0]").value("Manobrista"))
+                .andExpect(jsonPath("$.papeisFaltantes[1]").value("Curraleiro"));
     }
 
     @Test
