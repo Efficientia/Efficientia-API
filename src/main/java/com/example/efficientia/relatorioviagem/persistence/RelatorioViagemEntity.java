@@ -10,6 +10,10 @@ import jakarta.persistence.Table;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Duration;
+import java.util.UUID;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 
 @Entity
 @Table(name = "relatorio_viagem", schema = "public")
@@ -30,6 +34,15 @@ public class RelatorioViagemEntity {
 
     @Column(name = "finalizado_em")
     private LocalDateTime finalizadoEm;
+
+    @Column(name = "unidade_frigorifica_id")
+    private Integer unidadeFrigorificaId;
+
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
+    @Column(name = "atualizado_em")
+    private LocalDateTime atualizadoEm;
 
     @Column(name = "fazenda_id", nullable = false)
     private Integer fazendaId;
@@ -254,5 +267,62 @@ public class RelatorioViagemEntity {
 
     public boolean possuiAssinaturasCompletas(int qtdObrigatoria) {
         return contarAssinaturasPreenchidas() >= qtdObrigatoria;
+    }
+
+    public Integer getUnidadeFrigorificaId() { return unidadeFrigorificaId; }
+    public void setUnidadeFrigorificaId(Integer unidadeFrigorificaId) { this.unidadeFrigorificaId = unidadeFrigorificaId; }
+
+    public UUID getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(UUID idempotencyKey) { this.idempotencyKey = idempotencyKey; }
+
+    public LocalDateTime getAtualizadoEm() { return atualizadoEm; }
+    public void setAtualizadoEm(LocalDateTime atualizadoEm) { this.atualizadoEm = atualizadoEm; }
+
+    @PrePersist
+    public void prePersist() {
+        if (criadoEm == null) {
+            criadoEm = LocalDateTime.now();
+        }
+        atualizadoEm = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void preUpdate() {
+        atualizadoEm = LocalDateTime.now();
+    }
+
+    public Integer getTotalAnimais() {
+        int m = quantidadeMachos != null ? quantidadeMachos : 0;
+        int f = quantidadeFemeas != null ? quantidadeFemeas : 0;
+        int r = quantidadeMarrucos != null ? quantidadeMarrucos : 0;
+        return m + f + r;
+    }
+
+    public Integer getDistanciaPercorridaKm() {
+        if (kmChegadaDesembarcadouro != null && kmSaidaEmbarcadouro != null && kmChegadaDesembarcadouro >= kmSaidaEmbarcadouro) {
+            return kmChegadaDesembarcadouro - kmSaidaEmbarcadouro;
+        }
+        return null;
+    }
+
+    public Long getDuracaoViagemMinutos() {
+        LocalTime horarioInicio = horarioSaidaPropriedade != null
+                ? horarioSaidaPropriedade : horarioEmbarque;
+        if (dataEmbarque == null || horarioInicio == null) {
+            return null;
+        }
+        LocalDateTime inicio = LocalDateTime.of(dataEmbarque, horarioInicio);
+        LocalDateTime fim = null;
+        if (dataChegadaUnidade != null) {
+            if (horarioDesembarque != null) {
+                fim = LocalDateTime.of(dataChegadaUnidade, horarioDesembarque);
+            } else if (horarioChegadaUnidade != null) {
+                fim = LocalDateTime.of(dataChegadaUnidade, horarioChegadaUnidade);
+            }
+        }
+        if (fim != null && !fim.isBefore(inicio)) {
+            return Duration.between(inicio, fim).toMinutes();
+        }
+        return null;
     }
 }

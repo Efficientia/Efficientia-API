@@ -44,7 +44,41 @@ ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS url_assinatura_mano
 ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS url_assinatura_curraleiro TEXT;
 ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS capacidade_carga_utilizada INTEGER;
 ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS url_laudo_mortalidade TEXT;
+ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS unidade_frigorifica_id INTEGER;
+ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS idempotency_key UUID;
+ALTER TABLE public.relatorio_viagem ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_relatorio_viagem_idempotency
+    ON public.relatorio_viagem(idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_relatorio_viagem_unidade ON public.relatorio_viagem(unidade_frigorifica_id);
+
+-- Garantir a existencia e evolucao das tabelas de paradas e anomalias
+CREATE TABLE IF NOT EXISTS public.parada_imprevista (
+    id SERIAL PRIMARY KEY,
+    relatorio_id INTEGER NOT NULL REFERENCES public.relatorio_viagem(id) ON DELETE CASCADE,
+    motivo VARCHAR(50) NOT NULL,
+    data_hora_inicio TIMESTAMP NOT NULL,
+    data_hora_fim TIMESTAMP NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.anomalia_embarque (
+    id SERIAL PRIMARY KEY,
+    relatorio_id INTEGER NOT NULL REFERENCES public.relatorio_viagem(id) ON DELETE CASCADE,
+    anomalia VARCHAR(50) NOT NULL,
+    descricao_outros VARCHAR(150),
+    quantidade_animais INTEGER DEFAULT 1
+);
+ALTER TABLE public.anomalia_embarque ADD COLUMN IF NOT EXISTS quantidade_animais INTEGER DEFAULT 1;
+
+CREATE TABLE IF NOT EXISTS public.anomalia_desembarque (
+    id SERIAL PRIMARY KEY,
+    relatorio_id INTEGER NOT NULL REFERENCES public.relatorio_viagem(id) ON DELETE CASCADE,
+    anomalia VARCHAR(50) NOT NULL,
+    descricao_outros VARCHAR(150),
+    quantidade_animais INTEGER DEFAULT 1
+);
+ALTER TABLE public.anomalia_desembarque ADD COLUMN IF NOT EXISTS quantidade_animais INTEGER DEFAULT 1;
 DO $$
 BEGIN
     -- Permitir que colunas de assinaturas sejam nulas para coleta progressiva

@@ -231,8 +231,19 @@ Endpoints dedicados à assinatura fixa de perfil do motorista, armazenada como i
 ### 🚛 4.4 Relatórios de Viagem (`/api/v1/relatorios-viagem`) (`PROTEGIDO`)
 
 #### `POST /api/v1/relatorios-viagem`
-- **O que faz:** Registra um novo relatório de transporte animal (GTA, quantidade de animais, km inicial/final, avarias, etc.).
-- **Resposta (201 Created):** Retorna o relatório criado com ID numérico.
+- **O que faz:** Cria um diário de rota como `rascunho` (salvamento progressivo) ou `pendente` (submissão para análise). Recebe documentos, origem/destino, embarque/chegada, animais, ocorrências, assinaturas e dados do caminhão.
+- **Headers:** `Authorization: Bearer <token>`; a submissão (`status=pendente`) exige `Idempotency-Key: <UUID>`. O motorista autenticado e sua empresa são resolvidos pelo JWT/vínculo persistido, ignorando IDs de motorista enviados no corpo.
+- **Campos do corpo:** `fazendaId`, `unidadeFrigorificaId`, `numeroGta`, `numeroNotaFiscal`, datas e horários de embarque/chegada/desembarque, quilometragem, curral, sirene, contagens por categoria e condição, motivo/comentários, listas `paradasImprevistas`, `anomaliasEmbarque`, `anomaliasDesembarque` e referências de assinatura. Rascunhos podem conter apenas as etapas já preenchidas.
+- **Resposta (201 Created):** Retorna o relatório completo, incluindo status, metadados, totais, duração/distância calculadas, assinaturas e listas persistidas.
+
+#### `PUT /api/v1/relatorios-viagem/{id}`
+- **O que faz:** Atualiza o diário e permite retomar um rascunho entre as etapas do app. Os campos omitidos preservam os valores já salvos; listas de ocorrências são substituídas quando enviadas.
+- **Headers:** Submissão final exige `Idempotency-Key` se o relatório ainda não tiver uma chave.
+
+#### Validação e erros do diário
+- **Resposta de validação (400):** `ProblemDetail` com `fieldErrors`, um mapa estável de campo para mensagem. Inclui incoerência cronológica, quilometragem, contagens e status.
+- **Idempotência:** A mesma chave UUID identifica a submissão original e evita criar outro relatório em repetição da requisição.
+- **Assinatura do motorista:** O app não escolhe a URL; a API copia a referência da assinatura fixa associada à conta do motorista para o relatório.
 
 #### `GET /api/v1/relatorios-viagem`
 - **O que faz:** Lista os relatórios de viagem cadastrados.
@@ -254,10 +265,16 @@ Endpoints dedicados à assinatura fixa de perfil do motorista, armazenada como i
 
 #### `PATCH /api/v1/relatorios-viagem/{id}/finalizar`
 - **O que faz:** Finaliza o relatório de viagem (status `aprovado`), desocupando automaticamente o caminhão e a carreta para que fiquem imediatamente disponíveis para outros motoristas da frota.
+- **Header:** `Idempotency-Key: <UUID>` obrigatório se ainda não houver chave vinculada à submissão do relatório.
 - **Resposta (200 OK):** Relatório atualizado com timestamp `finalizadoEm`.
 
 #### `PATCH /api/v1/relatorios-viagem/{id}/status?status={novoStatus}`
 - **O que faz:** Atualiza o estado da viagem no ciclo de vida (`rascunho`, `pendente`, `aprovado`, `concluido`, `reprovado`).
+- **Header:** `Idempotency-Key: <UUID>` para transições finais, se ainda não houver chave vinculada.
+
+#### `PATCH /api/v1/relatorios-viagem/{id}/enviar`
+- **O que faz:** Envia o relatório completo para análise (`pendente`), usando as mesmas validações da submissão do formulário.
+- **Header:** `Idempotency-Key: <UUID>` obrigatório se ainda não houver chave vinculada ao relatório.
 
 ---
 

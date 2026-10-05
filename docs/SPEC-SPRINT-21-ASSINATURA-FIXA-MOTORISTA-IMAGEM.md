@@ -173,3 +173,7 @@ ALTER TABLE public.documento
 4. **Idempotência Móvel:** Utilização de `Idempotency-Key` único com índice no banco de dados para evitar inserções duplicadas por repetições de requisição em conexões 4G/5G oscilantes.
 5. **Versionamento e Imutabilidade:** Ao registrar uma nova assinatura, a versão ativa anterior recebe `ativa = false` e a nova versão é criada com `versao = versaoAnterior + 1` em transação única (`@Transactional`).
 6. **Desacoplamento em Formulários:** O vínculo de auditoria em relatórios aponta para o UUID imutável da versão da assinatura (`documento.assinatura_motorista_id`), garantindo valor probatório legal.
+
+### Cópia no diário de rota
+
+Ao criar ou atualizar um relatório, o aplicativo não pode enviar uma URL arbitrária para a assinatura do motorista. A API obtém a referência da assinatura ativa da conta autenticada e grava essa referência no relatório uma única vez. As rotas de registro de assinaturas em lote e por papel também ignoram uma URL de motorista recebida do cliente. Alterações futuras na assinatura da conta não reescrevem relatórios já lançados. Os campos das demais assinaturas continuam sendo enviados/coletados no próprio fluxo do diário.

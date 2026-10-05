@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 public interface RelatorioViagemRepository extends JpaRepository<RelatorioViagemEntity, Integer> {
 
@@ -24,4 +25,8 @@ public interface RelatorioViagemRepository extends JpaRepository<RelatorioViagem
     Optional<RelatorioViagemEntity> findFirstByCarretaIdAndStatusInOrderByCriadoEmDesc(Integer carretaId, Collection<String> statuses);
 
     List<RelatorioViagemEntity> findByStatusIn(Collection<String> statuses);
+
+    Optional<RelatorioViagemEntity> findByIdempotencyKey(UUID idempotencyKey);
+
+    List<RelatorioViagemEntity> findByEmpresaId(Integer empresaId);
 }
