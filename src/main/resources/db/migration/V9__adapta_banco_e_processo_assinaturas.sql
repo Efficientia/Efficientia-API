@@ -147,66 +147,54 @@ CREATE TABLE IF NOT EXISTS sc_frota.tb_veiculo_base (
     data_vencimento_inspecao DATE
 );
 
--- 6. Views de compatibilidade nos schemas do PDF apontando para as tabelas existentes (com checagem segura)
+-- 6. Views de compatibilidade nos schemas do PDF apontando para as tabelas existentes.
+-- Bancos que ja possuem tabelas fisicas com esses nomes devem conserva-las: PostgreSQL nao
+-- permite substituir uma tabela por uma view com CREATE OR REPLACE VIEW.
 DO $$
+DECLARE
+    alias_registro RECORD;
+    relacao_destino OID;
 BEGIN
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'usuario') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_usuario AS SELECT * FROM public.usuario';
-    END IF;
+    FOR alias_registro IN
+        SELECT * FROM (VALUES
+            ('sc_corporativo', 'tb_usuario', 'usuario'),
+            ('sc_corporativo', 'tb_empresa', 'empresa'),
+            ('sc_corporativo', 'tb_endereco', 'endereco'),
+            ('sc_corporativo', 'tb_configuracao_operacao', 'configuracao_operacao'),
+            ('sc_corporativo', 'tb_fazenda', 'fazenda'),
+            ('sc_corporativo', 'tb_unidade_frigorifica', 'unidade_frigorifica'),
+            ('sc_frota', 'tb_veiculo_cavalo', 'veiculo_cavalo'),
+            ('sc_frota', 'tb_veiculo_carreta', 'veiculo_carreta'),
+            ('sc_operacao', 'tb_relatorio_viagem', 'relatorio_viagem'),
+            ('sc_operacao', 'tb_parada_imprevista', 'parada_imprevista'),
+            ('sc_operacao', 'tb_anomalia_embarque', 'anomalia_embarque'),
+            ('sc_operacao', 'tb_anomalia_desembarque', 'anomalia_desembarque'),
+            ('sc_operacao', 'tb_auditoria_analise', 'auditoria_analise'),
+            ('sc_auditoria', 'tb_catalogo_dados', 'catalogo_dados'),
+            ('sc_auditoria', 'tb_auditoria_log', 'auditoria_log')
+        ) AS aliases(schema_destino, tabela_destino, tabela_origem)
+    LOOP
+        IF to_regclass(format('%I.%I', 'public', alias_registro.tabela_origem)) IS NOT NULL THEN
+            relacao_destino := to_regclass(
+                format('%I.%I', alias_registro.schema_destino, alias_registro.tabela_destino)
+            );
 
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'empresa') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_empresa AS SELECT * FROM public.empresa';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'endereco') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_endereco AS SELECT * FROM public.endereco';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'configuracao_operacao') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_configuracao_operacao AS SELECT * FROM public.configuracao_operacao';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'fazenda') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_fazenda AS SELECT * FROM public.fazenda';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'unidade_frigorifica') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_corporativo.tb_unidade_frigorifica AS SELECT * FROM public.unidade_frigorifica';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'veiculo_cavalo') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_frota.tb_veiculo_cavalo AS SELECT * FROM public.veiculo_cavalo';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'veiculo_carreta') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_frota.tb_veiculo_carreta AS SELECT * FROM public.veiculo_carreta';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'relatorio_viagem') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_operacao.tb_relatorio_viagem AS SELECT * FROM public.relatorio_viagem';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'parada_imprevista') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_operacao.tb_parada_imprevista AS SELECT * FROM public.parada_imprevista';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'anomalia_embarque') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_operacao.tb_anomalia_embarque AS SELECT * FROM public.anomalia_embarque';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'anomalia_desembarque') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_operacao.tb_anomalia_desembarque AS SELECT * FROM public.anomalia_desembarque';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'auditoria_analise') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_operacao.tb_auditoria_analise AS SELECT * FROM public.auditoria_analise';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'catalogo_dados') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_auditoria.tb_catalogo_dados AS SELECT * FROM public.catalogo_dados';
-    END IF;
-
-    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'auditoria_log') THEN
-        EXECUTE 'CREATE OR REPLACE VIEW sc_auditoria.tb_auditoria_log AS SELECT * FROM public.auditoria_log';
-    END IF;
+            IF relacao_destino IS NULL OR EXISTS (
+                SELECT 1 FROM pg_class
+                WHERE oid = relacao_destino AND relkind = 'v'
+            ) THEN
+                EXECUTE format(
+                    'CREATE OR REPLACE VIEW %I.%I AS SELECT * FROM %I.%I',
+                    alias_registro.schema_destino,
+                    alias_registro.tabela_destino,
+                    'public',
+                    alias_registro.tabela_origem
+                );
+            ELSE
+                RAISE NOTICE 'Mantendo relacao existente %.%; a view de compatibilidade nao sera criada',
+                    alias_registro.schema_destino,
+                    alias_registro.tabela_destino;
+            END IF;
+        END IF;
+    END LOOP;
 END $$;
