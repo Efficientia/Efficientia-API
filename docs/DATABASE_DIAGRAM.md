@@ -139,7 +139,7 @@ erDiagram
     parada_imprevista {
         int id PK
         int relatorio_id FK
-        motivo_parada motivo
+        varchar50 motivo
         timestamp data_hora_inicio
         timestamp data_hora_fim
     }
@@ -147,7 +147,7 @@ erDiagram
     anomalia_embarque {
         int id PK
         int relatorio_id FK
-        anomalia_embarque anomalia
+        varchar50 anomalia
         varchar150 descricao_outros
         int quantidade_animais
     }
@@ -155,7 +155,7 @@ erDiagram
     anomalia_desembarque {
         int id PK
         int relatorio_id FK
-        anomalia_desembarque anomalia
+        varchar50 anomalia
         varchar150 descricao_outros
         int quantidade_animais
     }
@@ -192,7 +192,9 @@ Paradas imprevistas persistem motivo e início/fim. Anomalias de embarque e dese
 
 ---
 
-## Enumeradores (Enums)
+## Enums e códigos controlados
+
+`tipo_usuario` permanece um enum PostgreSQL. A migration V10 converte os campos de motivo e anomalia para `VARCHAR(50)` com constraints `CHECK`, alinhando o banco aos atributos `String` do JPA; os tipos enum antigos continuam declarados pela V1, mas não são mais usados por essas colunas.
 
 ### `tipo_usuario`
 - `motorista`

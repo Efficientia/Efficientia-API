@@ -37,6 +37,7 @@ class PostgresIntegrationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.autoconfigure.exclude", () -> "");
         registry.add("spring.jpa.database-platform", () -> "org.hibernate.dialect.PostgreSQLDialect");
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
         registry.add("spring.flyway.enabled", () -> "true");
     }
 
