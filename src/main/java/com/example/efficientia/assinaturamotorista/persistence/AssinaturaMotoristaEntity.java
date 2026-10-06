@@ -7,6 +7,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -37,7 +39,8 @@ public class AssinaturaMotoristaEntity {
     @Column(name = "tamanho_bytes", nullable = false)
     private Long tamanhoBytes;
 
-    @Column(name = "sha256", nullable = false, length = 64)
+    @JdbcTypeCode(SqlTypes.CHAR)
+    @Column(name = "sha256", nullable = false, length = 64, columnDefinition = "CHAR(64)")
     private String sha256;
 
     @Column(name = "idempotency_key", nullable = false, unique = true)
