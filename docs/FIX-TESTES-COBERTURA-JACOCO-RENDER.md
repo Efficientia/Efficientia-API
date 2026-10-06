@@ -22,6 +22,13 @@ Este documento registra a resolução dos impedimentos de *deploy* na infraestru
 - **Correção:** 
   - A tabela histórica do Flyway e as instâncias de domínios problemáticos (ex. `relatorio_viagem`) foram limpas no Supabase. O script unificado de *schema* foi restaurado para o seu formato normal `V1__create_relational_schema.sql` para ser reconstruído do zero.
 
+#### Falha reportada no Render em 06/10/2026
+- **Problema:** A migração `V9__adapta_banco_e_processo_assinaturas.sql` falhava com o erro PostgreSQL `42809: "tb_usuario" is not a view`. O banco já possuía uma tabela física `sc_corporativo.tb_usuario`, e `CREATE OR REPLACE VIEW` não pode substituir uma tabela.
+- **Correção:** A criação das views de compatibilidade agora verifica o tipo da relação de destino. Cria a view quando o nome está livre, atualiza quando já existe uma view e preserva tabelas ou outros tipos de relação existentes, registrando um aviso no log.
+- **Dados:** Nenhuma tabela existente é removida, renomeada ou sobrescrita por essa etapa.
+- **Aplicação:** Como a tentativa de V9 falhou durante a inicialização, o próximo deploy deve repetir a migração corrigida. A estratégia Flyway configurada na aplicação executa `repair()` antes de `migrate()` para limpar o registro da tentativa com falha.
+- **Validação local:** O empacotamento Maven terminou com sucesso. A integração PostgreSQL foi iniciada, mas o Testcontainers não encontrou um daemon Docker disponível e pulou a execução; a migração ainda precisa ser confirmada no próximo deploy.
+
 ### 4. Bateria de Testes: Adequação das Restrições do JaCoCo (80%/60%)
 - **Problema:** O código estava engessado no CI/CD com métricas de 73% de linhas (mínimo 80%) e 53% de ramificações (mínimo 60%). Era preciso blindar componentes essenciais.
 - **Correção (Testes Escritos/Atualizados):**
