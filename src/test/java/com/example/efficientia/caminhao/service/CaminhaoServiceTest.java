@@ -487,4 +487,139 @@ class CaminhaoServiceTest {
         assertThrows(InspecaoVencidaException.class, () -> service.vincularCaminhaoAoRelatorio(300, req));
         verify(relatorioViagemRepository, never()).save(any());
     }
+
+    @Test
+    void deveAtualizarCarretaEValidarCapacidadeEPlacaDuplicada() {
+        VeiculoCarretaEntity carreta = new VeiculoCarretaEntity();
+        carreta.setId(30);
+        when(veiculoCarretaRepository.findById(30)).thenReturn(Optional.of(carreta));
+        when(veiculoCarretaRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(veiculoCarretaRepository.existsByPlacaAndIdNot("NEW1C11", 30)).thenReturn(true);
+
+        var atualizada = service.atualizarCaminhao("CARRETA", 30,
+                new AtualizarCaminhaoRequest("XYZ9W87", 4, 38, null, "Facchini", "Randon", null,
+                        "baixa", LocalDate.now().plusDays(20), true));
+        assertEquals(38, atualizada.capacidadeCabecas());
+        assertEquals("baixa", atualizada.tipoCarreta());
+
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarCaminhao("CARRETA", 30,
+                new AtualizarCaminhaoRequest(null, null, 0, null, null, null, null, null, null, null)));
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarCaminhao("CARRETA", 30,
+                new AtualizarCaminhaoRequest("new1c11", null, null, null, null, null, null, null, null, null)));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.atualizarCaminhao("CARRETA", 404,
+                new AtualizarCaminhaoRequest(null, null, null, null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void deveValidarCadastroDeConjuntoECapacidadeDaCarreta() {
+        assertThrows(CadastroInvalidoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CARRETA, "ABC1D23", null, 1, null, null,
+                        null, null, null, null, null, true)));
+        assertThrows(CadastroInvalidoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CONJUNTO, "ABC1D23", " ", 1, 40, null,
+                        null, null, null, null, null, true)));
+        assertThrows(CadastroInvalidoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(null, "ABC1D23", null, 1, null, null,
+                        null, null, null, null, null, true)));
+    }
+
+    @Test
+    void deveExcluirCarretaFisicamenteOuDesativarQuandoVinculada() {
+        VeiculoCarretaEntity semViagem = new VeiculoCarretaEntity();
+        semViagem.setId(40);
+        VeiculoCarretaEntity vinculada = new VeiculoCarretaEntity();
+        vinculada.setId(41);
+        vinculada.setAtivo(true);
+        when(veiculoCarretaRepository.findById(40)).thenReturn(Optional.of(semViagem));
+        when(veiculoCarretaRepository.findById(41)).thenReturn(Optional.of(vinculada));
+        when(relatorioViagemRepository.findByCarretaId(40)).thenReturn(List.of());
+        when(relatorioViagemRepository.findByCarretaId(41)).thenReturn(List.of(new RelatorioViagemEntity()));
+
+        service.removerCaminhao("CARRETA", 40);
+        service.removerCaminhao("CARRETA", 41);
+
+        verify(veiculoCarretaRepository).delete(semViagem);
+        verify(veiculoCarretaRepository).save(vinculada);
+        assertFalse(vinculada.getAtivo());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.removerCaminhao("CARRETA", 404));
+    }
+
+    @Test
+    void deveResolverBuscaPorIdSemTipoEInformarAusencias() {
+        VeiculoCarretaEntity carreta = new VeiculoCarretaEntity();
+        carreta.setId(50);
+        carreta.setPlaca("XYZ9W87");
+        when(veiculoCavaloRepository.findById(50)).thenReturn(Optional.empty());
+        when(veiculoCarretaRepository.findById(50)).thenReturn(Optional.of(carreta));
+        when(relatorioViagemRepository.findFirstByCarretaIdAndStatusInOrderByCriadoEmDesc(eq(50), any()))
+                .thenReturn(Optional.empty());
+
+        assertEquals("CARRETA", service.buscarCaminhaoPorId(null, 50).tipo());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoPorId("CARRETA", 404));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoPorId("outro", 404));
+    }
+
+    @Test
+    void deveAplicarFiltrosDeEmpresaAtividadeETipoNaListagem() {
+        RelatorioViagemEntity rel = new RelatorioViagemEntity();
+        rel.setId(70);
+        rel.setCavaloId(71);
+        rel.setMotoristaId(72);
+        VeiculoCavaloEntity emUso = new VeiculoCavaloEntity();
+        emUso.setId(71);
+        emUso.setEmpresaId(1);
+        emUso.setAtivo(true);
+        emUso.setPlaca("ABC1D23");
+        VeiculoCavaloEntity outraEmpresa = new VeiculoCavaloEntity();
+        outraEmpresa.setId(73);
+        outraEmpresa.setEmpresaId(2);
+        outraEmpresa.setAtivo(true);
+        VeiculoCavaloEntity inativo = new VeiculoCavaloEntity();
+        inativo.setId(74);
+        inativo.setEmpresaId(1);
+        inativo.setAtivo(false);
+        VeiculoCarretaEntity carreta = new VeiculoCarretaEntity();
+        carreta.setId(75);
+        carreta.setEmpresaId(1);
+        carreta.setAtivo(true);
+        UsuarioEntity motorista = new UsuarioEntity();
+        motorista.setId(72);
+        motorista.setNome("Motorista");
+        when(relatorioViagemRepository.findByStatusIn(any())).thenReturn(List.of(rel), List.of());
+        when(usuarioRepository.findAllById(any())).thenReturn(List.of(motorista));
+        when(veiculoCavaloRepository.findAll()).thenReturn(List.of(emUso, outraEmpresa, inativo));
+        when(veiculoCarretaRepository.findAll()).thenReturn(List.of(carreta));
+
+        var cavalos = service.listarCaminhoes(1, true, "CAVALO");
+        assertEquals(1, cavalos.size());
+        assertEquals("EM_USO", cavalos.get(0).statusUso());
+        assertEquals("Motorista", cavalos.get(0).motoristaAtualNome());
+        assertTrue(service.listarCaminhoes(1, false, "CARRETA").isEmpty());
+        assertTrue(service.listarCaminhoes(null, null, "DESCONHECIDO").isEmpty());
+    }
+
+    @Test
+    void deveInformarCaminhaoDisponivelECondicaoSemMotorista() {
+        RelatorioViagemEntity rel = new RelatorioViagemEntity();
+        rel.setId(80);
+        rel.setCavaloId(81);
+        rel.setCarretaId(82);
+        rel.setStatus("aprovado");
+        VeiculoCavaloEntity cavalo = new VeiculoCavaloEntity();
+        cavalo.setId(81);
+        cavalo.setPlaca("ABC1D23");
+        VeiculoCarretaEntity carreta = new VeiculoCarretaEntity();
+        carreta.setId(82);
+        carreta.setPlaca("XYZ9W87");
+        when(relatorioViagemRepository.findById(80)).thenReturn(Optional.of(rel));
+        when(veiculoCavaloRepository.findById(81)).thenReturn(Optional.of(cavalo));
+        when(veiculoCarretaRepository.findById(82)).thenReturn(Optional.of(carreta));
+        when(usuarioRepository.findById(null)).thenReturn(Optional.empty());
+
+        var response = service.buscarCaminhaoDoRelatorio(80);
+
+        assertFalse(response.emUso());
+        assertEquals("Desconhecido", response.motoristaNome());
+        assertEquals("DISPONIVEL", response.cavalo().statusUso());
+    }
 }
