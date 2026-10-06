@@ -18,6 +18,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -86,7 +87,7 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveFinalizarRelatorioViagem() throws Exception {
-        when(service.finalizar(1)).thenReturn(Mockito.mock(RelatorioViagemResponse.class));
+        when(service.finalizar(eq(1), isNull())).thenReturn(Mockito.mock(RelatorioViagemResponse.class));
 
         mockMvc.perform(patch("/api/v1/relatorios-viagem/1/finalizar"))
                 .andExpect(status().isOk());
@@ -116,7 +117,7 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveRetornar422QuandoAssinaturasIncompletasAoFinalizar() throws Exception {
-        when(service.finalizar(1))
+        when(service.finalizar(eq(1), isNull()))
                 .thenThrow(new AssinaturasIncompletasException(1, 4, 2, List.of("Manobrista", "Curraleiro")));
 
         mockMvc.perform(patch("/api/v1/relatorios-viagem/1/finalizar"))
@@ -130,11 +131,11 @@ class RelatorioViagemControllerTest {
     }
 
     @Test
-    void deveRejeitarCriacaoSemCamposObrigatorios() throws Exception {
+    void deveAceitarRascunhoSemCamposObrigatorios() throws Exception {
         mockMvc.perform(post("/api/v1/relatorios-viagem")
                         .contentType(APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated());
     }
 
     @TestConfiguration(proxyBeanMethods = false)

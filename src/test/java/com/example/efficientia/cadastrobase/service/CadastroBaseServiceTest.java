@@ -172,4 +172,79 @@ class CadastroBaseServiceTest {
         when(enderecoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         service.criarEndereco(new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.CriarEnderecoRequest("123", "rua", "1", "cid", "sp"));
     }
+
+    @Test
+    void deveListarBuscarAtualizarERemoverCavalos() {
+        VeiculoCavaloEntity cavalo = new VeiculoCavaloEntity();
+        cavalo.setId(3);
+        cavalo.setPlaca("ABC1D23");
+        cavalo.setAtivo(true);
+        when(cavaloRepository.findAll()).thenReturn(java.util.List.of(cavalo));
+        when(cavaloRepository.findById(3)).thenReturn(java.util.Optional.of(cavalo));
+        when(cavaloRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals(1, service.listarCavalos().size());
+        assertEquals(3, service.buscarCavalo(3).id());
+        var request = new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCavaloRequest(
+                "DEF2E34", false, 9, LocalDate.of(2027, 1, 1), 1200, "Scania", "R450", 2022
+        );
+        var atualizado = service.atualizarCavalo(3, request);
+        assertEquals("DEF2E34", atualizado.placa());
+        assertEquals(9, atualizado.empresaId());
+        service.removerCavalo(3);
+        verify(cavaloRepository).delete(cavalo);
+    }
+
+    @Test
+    void deveRejeitarCavaloInexistenteOuPlacaDuplicadaNaAtualizacao() {
+        VeiculoCavaloEntity cavalo = new VeiculoCavaloEntity();
+        cavalo.setId(4);
+        when(cavaloRepository.findById(4)).thenReturn(java.util.Optional.of(cavalo));
+        when(cavaloRepository.findById(99)).thenReturn(java.util.Optional.empty());
+        when(cavaloRepository.existsByPlacaAndIdNot("ABC1D23", 4)).thenReturn(true);
+
+        assertThrows(CadastroInvalidoException.class, () -> service.buscarCavalo(99));
+        assertThrows(CadastroInvalidoException.class, () -> service.removerCavalo(99));
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarCavalo(99,
+                new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCavaloRequest(null, null, null, null, null, null, null, null)));
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarCavalo(4,
+                new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCavaloRequest("abc1d23", null, null, null, null, null, null, null)));
+    }
+
+    @Test
+    void deveListarBuscarAtualizarERemoverCarretas() {
+        com.example.efficientia.cadastrobase.persistence.VeiculoCarretaEntity carreta =
+                new com.example.efficientia.cadastrobase.persistence.VeiculoCarretaEntity();
+        carreta.setId(5);
+        carreta.setPlaca("XYZ9W87");
+        carreta.setCapacidadeCabecas(40);
+        when(carretaRepository.findAll()).thenReturn(java.util.List.of(carreta));
+        when(carretaRepository.findById(5)).thenReturn(java.util.Optional.of(carreta));
+        when(carretaRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        assertEquals(1, service.listarCarretas().size());
+        assertEquals(5, service.buscarCarreta(5).id());
+        var request = new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCarretaRequest(
+                "QWE1R23", 35, false, 9, LocalDate.of(2027, 1, 1), "Facchini", "3E", "grade baixa"
+        );
+        assertEquals("QWE1R23", service.atualizarCarreta(5, request).placa());
+        service.removerCarreta(5);
+        verify(carretaRepository).delete(carreta);
+    }
+
+    @Test
+    void deveRejeitarCarretaInexistenteCapacidadeInvalidaEPlacaDuplicada() {
+        com.example.efficientia.cadastrobase.persistence.VeiculoCarretaEntity carreta =
+                new com.example.efficientia.cadastrobase.persistence.VeiculoCarretaEntity();
+        when(carretaRepository.findById(6)).thenReturn(java.util.Optional.of(carreta));
+        when(carretaRepository.findById(99)).thenReturn(java.util.Optional.empty());
+        when(carretaRepository.existsByPlacaAndIdNot("XYZ9W87", 6)).thenReturn(true);
+
+        assertThrows(CadastroInvalidoException.class, () -> service.buscarCarreta(99));
+        assertThrows(CadastroInvalidoException.class, () -> service.removerCarreta(99));
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarCarreta(6,
+                new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCarretaRequest(null, 0, null, null, null, null, null, null)));
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarCarreta(6,
+                new com.example.efficientia.cadastrobase.api.CadastroBaseContracts.AtualizarCarretaRequest("xyz9w87", null, null, null, null, null, null, null)));
+    }
 }
