@@ -19,6 +19,7 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 import static com.example.efficientia.documento.storage.StorageValidationException.Reason.EMPTY_FILE;
+import static com.example.efficientia.documento.storage.StorageValidationException.Reason.INVALID_INPUT;
 import static com.example.efficientia.documento.storage.StorageValidationException.Reason.INVALID_KEY;
 import static com.example.efficientia.documento.storage.StorageValidationException.Reason.SIZE_LIMIT_EXCEEDED;
 import static com.example.efficientia.documento.storage.StorageValidationException.Reason.UNSUPPORTED_MEDIA_TYPE;
@@ -148,6 +149,109 @@ class LocalStorageServiceTest {
     }
 
     @Test
+    void deveRejeitarDadosObrigatoriosAusentesEFecharOStream() {
+        LocalStorageService storage = novoStorage(tempDir.resolve("storage"), 100, 100);
+        TrackingInputStream input = new TrackingInputStream(new byte[]{1});
+
+        assertThatThrownBy(() -> storage.salvar(null, "arquivo.pdf", "application/pdf", input))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_INPUT));
+        assertThat(input.closed()).isTrue();
+
+        assertThatThrownBy(() -> storage.salvar(UUID.randomUUID(), "  ", "application/pdf",
+                new ByteArrayInputStream(new byte[]{1})))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_INPUT));
+
+        assertThatThrownBy(() -> storage.salvar(UUID.randomUUID(), "arquivo.pdf", "application/pdf", null))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_INPUT));
+    }
+
+    @Test
+    void deveContinuarCopiaQuandoStreamRetornaZeroEReutilizarDiretoriosExistentes() throws IOException {
+        LocalStorageService storage = novoStorage(tempDir.resolve("storage"), 100, 100);
+        UUID referencia = UUID.randomUUID();
+        byte[] conteudo = "conteudo-depois-de-leitura-zero".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        ArquivoArmazenado primeiro = storage.salvar(referencia, "primeiro.pdf", "application/pdf",
+                new ZeroThenDataInputStream(conteudo));
+        ArquivoArmazenado segundo = storage.salvar(referencia, "segundo.pdf", "application/pdf",
+                new ByteArrayInputStream(conteudo));
+
+        assertThat(primeiro.tamanhoBytes()).isEqualTo(conteudo.length);
+        assertThat(segundo.tamanhoBytes()).isEqualTo(conteudo.length);
+        try (InputStream input = storage.abrir(primeiro.storageKey()).conteudo().getInputStream()) {
+            assertThat(input.readAllBytes()).isEqualTo(conteudo);
+        }
+    }
+
+    @Test
+    void deveEncapsularFalhaDeLeituraELimparArquivoTemporario() throws IOException {
+        Path root = tempDir.resolve("storage");
+        LocalStorageService storage = novoStorage(root, 100, 100);
+        TrackingFailingInputStream input = new TrackingFailingInputStream();
+
+        assertThatThrownBy(() -> storage.salvar(UUID.randomUUID(), "falha.pdf", "application/pdf", input))
+                .isInstanceOf(StorageException.class)
+                .hasCauseInstanceOf(IOException.class);
+
+        assertThat(input.closed()).isTrue();
+        try (var paths = Files.walk(root)) {
+            assertThat(paths.filter(Files::isRegularFile).toList()).isEmpty();
+        }
+    }
+
+    @Test
+    void deveLidarComRaizAusenteChavesInexistentesEDiretoriosNoLugarDeArquivo() throws IOException {
+        Path root = tempDir.resolve("storage-ainda-nao-criado");
+        LocalStorageService storage = novoStorage(root, 100, 100);
+        String chave = chaveValida();
+
+        assertThatThrownBy(() -> storage.abrir(chave)).isInstanceOf(StorageFileNotFoundException.class);
+        assertThatCode(() -> storage.remover(chave)).doesNotThrowAnyException();
+        assertThat(root).doesNotExist();
+
+        Files.createDirectories(root);
+        assertThatThrownBy(() -> storage.abrir(chave)).isInstanceOf(StorageFileNotFoundException.class);
+        assertThatCode(() -> storage.remover(chave)).doesNotThrowAnyException();
+
+        Path arquivoComoDiretorio = root.resolve(chave.replace('/', java.io.File.separatorChar));
+        Files.createDirectories(arquivoComoDiretorio);
+        assertThatThrownBy(() -> storage.abrir(chave))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_KEY));
+        assertThatThrownBy(() -> storage.remover(chave))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_KEY));
+    }
+
+    @Test
+    void deveRejeitarDiretorioDeEntidadeQueNaoSejaDiretorioSeguro() throws IOException {
+        Path root = tempDir.resolve("storage");
+        Files.createDirectories(root);
+        Files.writeString(root.resolve("documentos"), "arquivo em conflito");
+        LocalStorageService storage = novoStorage(root, 100, 100);
+
+        assertThatThrownBy(() -> storage.salvar(UUID.randomUUID(), "arquivo.pdf", "application/pdf",
+                new ByteArrayInputStream(new byte[]{1})))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_KEY));
+    }
+
+    @Test
+    void deveRejeitarChavesNulasEComFormatoIncorreto() {
+        LocalStorageService storage = novoStorage(tempDir.resolve("storage"), 100, 100);
+
+        assertThatThrownBy(() -> storage.abrir(null))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_KEY));
+        assertThatThrownBy(() -> storage.remover(""))
+                .isInstanceOfSatisfying(StorageValidationException.class,
+                        exception -> assertThat(exception.getReason()).isEqualTo(INVALID_KEY));
+    }
+
+    @Test
     void deveConsumirStreamEmBlocosSemCarregarArquivoInteiro() {
         LocalStorageService storage = novoStorage(tempDir.resolve("storage"), 128 * 1_024, 128 * 1_024);
         GeneratedInputStream input = new GeneratedInputStream(64 * 1_024);
@@ -177,6 +281,84 @@ class LocalStorageServiceTest {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(conteudo));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
+        }
+    }
+
+    private String chaveValida() {
+        return "documentos/" + UUID.randomUUID() + "/" + UUID.randomUUID() + ".pdf";
+    }
+
+    private static final class TrackingInputStream extends ByteArrayInputStream {
+
+        private boolean closed;
+
+        private TrackingInputStream(byte[] conteudo) {
+            super(conteudo);
+        }
+
+        @Override
+        public void close() throws IOException {
+            closed = true;
+            super.close();
+        }
+
+        private boolean closed() {
+            return closed;
+        }
+    }
+
+    private static final class ZeroThenDataInputStream extends InputStream {
+
+        private final byte[] conteudo;
+        private boolean returnedZero;
+        private int indice;
+
+        private ZeroThenDataInputStream(byte[] conteudo) {
+            this.conteudo = conteudo;
+        }
+
+        @Override
+        public int read() {
+            return indice < conteudo.length ? conteudo[indice++] & 0xff : -1;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) {
+            if (!returnedZero) {
+                returnedZero = true;
+                return 0;
+            }
+            if (indice == conteudo.length) {
+                return -1;
+            }
+            int count = Math.min(length, conteudo.length - indice);
+            System.arraycopy(conteudo, indice, buffer, offset, count);
+            indice += count;
+            return count;
+        }
+    }
+
+    private static final class TrackingFailingInputStream extends InputStream {
+
+        private boolean closed;
+
+        @Override
+        public int read() throws IOException {
+            throw new IOException("Falha de leitura simulada.");
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            throw new IOException("Falha de leitura simulada.");
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+
+        private boolean closed() {
+            return closed;
         }
     }
 

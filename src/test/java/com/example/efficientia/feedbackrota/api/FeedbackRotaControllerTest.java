@@ -2,6 +2,7 @@ package com.example.efficientia.feedbackrota.api;
 
 import com.example.efficientia.feedbackrota.service.FeedbackRotaService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -18,6 +19,7 @@ import java.util.UUID;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.clearInvocations;
 
 @WebMvcTest(FeedbackRotaController.class)
 @AutoConfigureMockMvc(addFilters = false) // Ignore security filters for unit test to focus on controller logic
@@ -29,6 +31,11 @@ class FeedbackRotaControllerTest {
 
     @Autowired
     private FeedbackRotaService service;
+
+    @BeforeEach
+    void resetServiceMock() {
+        clearInvocations(service);
+    }
 
     @TestConfiguration
     static class TestDependencies {
@@ -75,5 +82,28 @@ class FeedbackRotaControllerTest {
                         .content(jsonPayload)
                         .with(csrf()))
                 .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(service);
+    }
+
+    @Test
+    @WithMockUser
+    void deveRetornarBadRequestQuandoAvaliacaoEstaEmBranco() throws Exception {
+        String jsonPayload = """
+                {
+                  "rotaId": "%s",
+                  "avaliacao": " ",
+                  "motivos": [],
+                  "comentario": "Sem avaliação"
+                }
+                """.formatted(UUID.randomUUID());
+
+        mockMvc.perform(post("/api/v1/feedbacks-rota")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonPayload)
+                        .with(csrf()))
+                .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(service);
     }
 }

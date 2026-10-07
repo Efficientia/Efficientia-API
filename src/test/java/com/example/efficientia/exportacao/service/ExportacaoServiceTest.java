@@ -2,6 +2,8 @@ package com.example.efficientia.exportacao.service;
 
 import com.example.efficientia.documento.persistence.DocumentoEntity;
 import com.example.efficientia.documento.persistence.DocumentoRepository;
+import com.example.efficientia.documento.storage.StorageService;
+import com.example.efficientia.documento.storage.StoredDocument;
 import com.example.efficientia.exportacao.api.SolicitarExportacaoRequest;
 import com.example.efficientia.exportacao.domain.EstadoExportacao;
 import com.example.efficientia.exportacao.exception.ExportacaoConflitoException;
@@ -14,9 +16,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +45,7 @@ class ExportacaoServiceTest {
     private ExportacaoPersistenceService persistenceService;
     private DocumentoRepository documentoRepository;
     private DocumentoAccessPolicy accessPolicy;
+    private StorageService storageService;
     private ExportacaoService service;
 
     @BeforeEach
@@ -48,7 +54,7 @@ class ExportacaoServiceTest {
         persistenceService = mock(ExportacaoPersistenceService.class);
         documentoRepository = mock(DocumentoRepository.class);
         accessPolicy = mock(DocumentoAccessPolicy.class);
-        var storageService = mock(com.example.efficientia.documento.storage.StorageService.class);
+        storageService = mock(StorageService.class);
         service = new ExportacaoService(repository, persistenceService, documentoRepository, accessPolicy, storageService);
         when(accessPolicy.usuarioAtualId()).thenReturn(Optional.of(42));
         when(persistenceService.criar(any(ExportacaoEntity.class))).thenAnswer(invocation -> {
@@ -128,6 +134,21 @@ class ExportacaoServiceTest {
     }
 
     @Test
+    void deveRejeitarComandoNuloChaveNulaListaNulaEIdentificadorNulo() {
+        assertThatThrownBy(() -> service.solicitar(null, UUID.randomUUID()))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+        assertThatThrownBy(() -> service.solicitar(request(UUID.randomUUID()), null))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+        assertThatThrownBy(() -> service.solicitar(new SolicitarExportacaoRequest(null), UUID.randomUUID()))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+        assertThatThrownBy(() -> service.solicitar(
+                new SolicitarExportacaoRequest(Arrays.asList((UUID) null)), UUID.randomUUID()))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+
+        verifyNoInteractions(repository, documentoRepository, persistenceService);
+    }
+
+    @Test
     void deveAceitarTotalExatamenteIgualAQuinhentosMiB() {
         UUID documentoId = UUID.randomUUID();
         UUID idempotencyKey = UUID.randomUUID();
@@ -152,6 +173,23 @@ class ExportacaoServiceTest {
         assertThatThrownBy(() -> service.solicitar(request(documentoId), idempotencyKey))
                 .isInstanceOf(ExportacaoInvalidaException.class)
                 .hasMessageContaining("500 MiB");
+
+        verify(persistenceService, never()).criar(any());
+    }
+
+    @Test
+    void deveRejeitarSomaDeTamanhosQueEstouraLong() {
+        UUID primeiroId = UUID.randomUUID();
+        UUID segundoId = UUID.randomUUID();
+        UUID idempotencyKey = UUID.randomUUID();
+        when(repository.findByIdempotencyKey(idempotencyKey)).thenReturn(Optional.empty());
+        when(documentoRepository.findById(primeiroId)).thenReturn(Optional.of(documentoComArquivo(1L)));
+        when(documentoRepository.findById(segundoId)).thenReturn(Optional.of(documentoComArquivo(Long.MAX_VALUE)));
+
+        assertThatThrownBy(() -> service.solicitar(
+                new SolicitarExportacaoRequest(List.of(primeiroId, segundoId)), idempotencyKey))
+                .isInstanceOf(ExportacaoInvalidaException.class)
+                .hasMessageContaining("excede o limite permitido");
 
         verify(persistenceService, never()).criar(any());
     }
@@ -375,6 +413,117 @@ class ExportacaoServiceTest {
 
         assertThatThrownBy(() -> service.buscar(id))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void deveConsultarExportacaoDoUsuarioAtualEPermitirQuandoNaoHaUsuarioAutenticado() {
+        UUID id = UUID.randomUUID();
+        ExportacaoEntity exportacao = exportacaoExistente(
+                UUID.randomUUID(), List.of(UUID.randomUUID()), EstadoExportacao.NA_FILA);
+        exportacao.setId(id);
+        when(repository.findById(id)).thenReturn(Optional.of(exportacao));
+
+        var responseDoProprietario = service.buscar(id);
+        assertThat(responseDoProprietario.id()).isEqualTo(id);
+
+        when(accessPolicy.usuarioAtualId()).thenReturn(Optional.empty());
+        var responseSemUsuario = service.buscar(id);
+        assertThat(responseSemUsuario.id()).isEqualTo(id);
+    }
+
+    @Test
+    void deveRetornarZeroDocumentosQuandoRespostaPersistidaNaoTemLista() {
+        UUID id = UUID.randomUUID();
+        ExportacaoEntity exportacao = mock(ExportacaoEntity.class);
+        when(exportacao.getDocumentoIds()).thenReturn(null);
+        when(exportacao.getEstado()).thenReturn(EstadoExportacao.NA_FILA);
+        when(exportacao.getId()).thenReturn(id);
+        when(exportacao.getSolicitadoPor()).thenReturn(42);
+        when(repository.findById(id)).thenReturn(Optional.of(exportacao));
+
+        var response = service.buscar(id);
+
+        assertThat(response.quantidadeDocumentos()).isZero();
+    }
+
+    @Test
+    void deveRejeitarBuscaComIdentificadorNulo() {
+        assertThatThrownBy(() -> service.buscar(null))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void deveRejeitarDownloadComIdentificadorNuloOuExportacaoAusente() {
+        assertThatThrownBy(() -> service.baixarConteudo(null))
+                .isInstanceOf(ExportacaoInvalidaException.class);
+
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.baixarConteudo(id))
+                .isInstanceOf(ExportacaoNaoEncontradaException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void deveImpedirDownloadDeExportacaoDeOutroUsuario() {
+        UUID id = UUID.randomUUID();
+        ExportacaoEntity exportacao = exportacaoExistente(
+                UUID.randomUUID(), List.of(UUID.randomUUID()), EstadoExportacao.CONCLUIDA);
+        exportacao.setId(id);
+        exportacao.setSolicitadoPor(7);
+        when(repository.findById(id)).thenReturn(Optional.of(exportacao));
+
+        assertThatThrownBy(() -> service.baixarConteudo(id))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void deveRejeitarDownloadDeExportacaoExpiradaOuAindaNaoConcluida() {
+        UUID expiradaId = UUID.randomUUID();
+        ExportacaoEntity expirada = exportacaoExistente(
+                UUID.randomUUID(), List.of(UUID.randomUUID()), EstadoExportacao.EXPIRADA);
+        expirada.setId(expiradaId);
+        when(repository.findById(expiradaId)).thenReturn(Optional.of(expirada));
+
+        assertThatThrownBy(() -> service.baixarConteudo(expiradaId))
+                .isInstanceOf(com.example.efficientia.exportacao.exception.ExportacaoExpiradaException.class);
+
+        UUID pendenteId = UUID.randomUUID();
+        ExportacaoEntity pendente = exportacaoExistente(
+                UUID.randomUUID(), List.of(UUID.randomUUID()), EstadoExportacao.PROCESSANDO);
+        pendente.setId(pendenteId);
+        when(repository.findById(pendenteId)).thenReturn(Optional.of(pendente));
+
+        assertThatThrownBy(() -> service.baixarConteudo(pendenteId))
+                .isInstanceOf(com.example.efficientia.exportacao.exception.ExportacaoNaoConcluidaException.class);
+
+        verifyNoInteractions(storageService);
+    }
+
+    @Test
+    void deveBaixarConteudoQuandoExportacaoEstaConcluida() {
+        UUID id = UUID.randomUUID();
+        ExportacaoEntity exportacao = exportacaoExistente(
+                UUID.randomUUID(), List.of(UUID.randomUUID()), EstadoExportacao.CONCLUIDA);
+        exportacao.setId(id);
+        exportacao.setStorageKey("exports/arquivo.zip");
+        exportacao.setNomeArquivo("relatorios.zip");
+        Resource resource = new ByteArrayResource(new byte[]{1, 2, 3});
+        when(repository.findById(id)).thenReturn(Optional.of(exportacao));
+        when(storageService.abrir("exports/arquivo.zip"))
+                .thenReturn(new StoredDocument(resource, "application/zip", 3));
+
+        var conteudo = service.baixarConteudo(id);
+
+        assertThat(conteudo.resource()).isSameAs(resource);
+        assertThat(conteudo.mimeType()).isEqualTo("application/zip");
+        assertThat(conteudo.tamanhoBytes()).isEqualTo(3);
+        assertThat(conteudo.nomeArquivo()).isEqualTo("relatorios.zip");
+        verify(storageService).abrir("exports/arquivo.zip");
     }
 
     private SolicitarExportacaoRequest request(UUID... documentoIds) {

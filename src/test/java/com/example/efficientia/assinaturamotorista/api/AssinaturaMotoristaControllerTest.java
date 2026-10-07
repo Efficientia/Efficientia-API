@@ -20,16 +20,26 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -447,6 +457,267 @@ class AssinaturaMotoristaControllerTest {
                                 .jwt(token -> token.claim("usuario_id", 42))))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.title").value("Tamanho da Assinatura Excedido"));
+    }
+
+    @Test
+    @DisplayName("Metadados sem modalidade são rejeitados com 400")
+    void deveRejeitarMetadadosSemModalidade() throws Exception {
+        MockMultipartFile metadados = new MockMultipartFile(
+                "metadados", "metadados.json", MediaType.APPLICATION_JSON_VALUE,
+                "{\"textoOrigem\":\"tablet\"}".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(criarArquivoValido())
+                        .file(metadados)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Metadados Inválidos"));
+    }
+
+    @Test
+    @DisplayName("Texto de origem acima do limite é rejeitado com 400")
+    void deveRejeitarTextoDeOrigemAcimaDoLimite() throws Exception {
+        String texto = "x".repeat(151);
+        MockMultipartFile metadados = criarMetadadosValidos(ModalidadeAssinaturaMotorista.NOME_DIGITADO, texto);
+
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(criarArquivoValido())
+                        .file(metadados)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Metadados Inválidos"));
+    }
+
+    @Test
+    @DisplayName("Parte de metadados ausente retorna erro multipart estável")
+    void deveRetornar400QuandoFaltarParteDeMetadados() throws Exception {
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(criarArquivoValido())
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Parte Multipart Ausente"));
+    }
+
+    @Test
+    @DisplayName("Arquivo multipart vazio é tratado como formato inválido")
+    void deveRejeitarArquivoVazio() throws Exception {
+        MockMultipartFile arquivoVazio = new MockMultipartFile("arquivo", "assinatura.png", "image/png", new byte[0]);
+
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(arquivoVazio)
+                        .file(criarMetadadosValidos(ModalidadeAssinaturaMotorista.DESENHO, null))
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.title").value("Formato de Assinatura Inválido"));
+    }
+
+    @Test
+    @DisplayName("Cadastro administrativo aceita o papel ROLE_ADMINISTRADOR")
+    void deveAceitarPapelAdministradorAlternativo() throws Exception {
+        UUID key = UUID.randomUUID();
+        when(service.salvarOuAtualizarAssinatura(eq(99), eq(1), eq(key), any(), any(byte[].class), eq(false)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 99, false));
+
+        mockMvc.perform(multipart("/api/v1/usuarios/{motoristaId}/assinatura", 99)
+                        .file(criarArquivoValido())
+                        .file(criarMetadadosValidos(ModalidadeAssinaturaMotorista.DESENHO, null))
+                        .header("Idempotency-Key", key.toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMINISTRADOR"))
+                                .jwt(token -> token.claim("usuario_id", 1))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Analista pode consultar metadados da assinatura de terceiro")
+    void devePermitirConsultaDeTerceiroPorAnalista() throws Exception {
+        when(service.buscarAssinaturaAtiva(eq(99), eq(false)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 99, false));
+
+        mockMvc.perform(get("/api/v1/usuarios/{usuarioId}/assinatura", 99)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALISTA"))
+                                .jwt(token -> token.claim("usuario_id", 7))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Funcionário Friboi pode consultar o conteúdo da assinatura de terceiro")
+    void devePermitirConteudoDeTerceiroPorFuncionarioFriboi() throws Exception {
+        when(service.buscarConteudoAssinaturaAtiva(eq(99))).thenReturn(VALID_PNG_BYTES);
+
+        mockMvc.perform(get("/api/v1/usuarios/{usuarioId}/assinatura/conteudo", 99)
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_FUNCIONARIO_FRIBOI"))
+                                .jwt(token -> token.claim("usuario_id", 7))))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(VALID_PNG_BYTES));
+    }
+
+    @Test
+    @DisplayName("JWT aceita o identificador do usuário em texto numérico")
+    void deveExtrairUsuarioIdDeClaimTexto() throws Exception {
+        when(service.buscarAssinaturaAtiva(eq(42), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 42, true));
+
+        mockMvc.perform(get("/api/v1/usuarios/me/assinatura")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", " 42 "))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("JWT usa admin_id numérico quando usuario_id não é numérico")
+    void deveUsarAdminIdQuandoClaimPrincipalForInvalida() throws Exception {
+        when(service.buscarAssinaturaAtiva(eq(12), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 12, true));
+
+        mockMvc.perform(get("/api/v1/usuarios/me/assinatura")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", "nao-numero").claim("admin_id", 12))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("JWT usa subject numérico como alternativa de identificador")
+    void deveUsarSubjectQuandoClaimsDeUsuarioEstaoAusentes() throws Exception {
+        when(service.buscarAssinaturaAtiva(eq(13), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 13, true));
+
+        mockMvc.perform(get("/api/v1/usuarios/me/assinatura")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.subject("13"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("JWT sem identificador numérico recebe 401")
+    void deveRetornar401QuandoIdentificadorDoJwtNaoForNumerico() throws Exception {
+        mockMvc.perform(get("/api/v1/usuarios/me/assinatura")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.subject("driver"))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Erro na Requisição"));
+    }
+
+    @Test
+    @DisplayName("JWT ignora claims em branco e usa subject numérico")
+    void deveIgnorarClaimsEmBranco() throws Exception {
+        when(service.buscarAssinaturaAtiva(eq(14), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 14, true));
+
+        mockMvc.perform(get("/api/v1/usuarios/me/assinatura")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", "  ").subject("14"))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("Falha de leitura do arquivo é convertida em erro de formato")
+    void deveConverterFalhaAoLerArquivoEmErroDeFormato() throws Exception {
+        MultipartFile arquivo = mock(MultipartFile.class);
+        when(arquivo.isEmpty()).thenReturn(false);
+        when(arquivo.getBytes()).thenThrow(new IOException("erro de leitura"));
+        Authentication motorista = autenticacaoJwt("42", List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+        AssinaturaMotoristaController controller = new AssinaturaMotoristaController(service);
+
+        assertThrows(AssinaturaFormatoInvalidoException.class,
+                () -> controller.cadastrarMinhaAssinatura(UUID.randomUUID(), arquivo,
+                        new AssinaturaMetadadosRequest(ModalidadeAssinaturaMotorista.DESENHO, null), motorista));
+    }
+
+    @Test
+    @DisplayName("Arquivo nulo é rejeitado antes do armazenamento")
+    void deveRejeitarArquivoNulo() {
+        Authentication motorista = autenticacaoJwt("42", List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+
+        assertThrows(AssinaturaFormatoInvalidoException.class,
+                () -> new AssinaturaMotoristaController(service).cadastrarMinhaAssinatura(
+                        UUID.randomUUID(), null,
+                        new AssinaturaMetadadosRequest(ModalidadeAssinaturaMotorista.DESENHO, null), motorista));
+    }
+
+    @Test
+    @DisplayName("Autenticação obtida do contexto de segurança permite resolver a identidade JWT")
+    void deveUsarAutenticacaoJwtDoContextoQuandoParametroNaoVier() {
+        when(service.buscarAssinaturaAtiva(eq(17), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 17, true));
+        SecurityContextHolder.getContext().setAuthentication(autenticacaoJwt("17",
+                List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA"))));
+        try {
+            new AssinaturaMotoristaController(service).buscarMinhaAssinatura(null);
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("Identidade ausente no parâmetro e contexto anônimo resulta em 401")
+    void deveRetornar401QuandoContextoForAnonimo() {
+        Authentication anonimo = new UsernamePasswordAuthenticationToken("anonymousUser", "", List.of());
+        SecurityContextHolder.getContext().setAuthentication(anonimo);
+        try {
+            assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                    () -> new AssinaturaMotoristaController(service).buscarMinhaAssinatura(null));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("Contexto não autenticado não é usado como identidade")
+    void deveIgnorarAutenticacaoNaoAutenticadaNoContexto() {
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("driver", "password"));
+        try {
+            assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                    () -> new AssinaturaMotoristaController(service).buscarMinhaAssinatura(null));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("Requisição direta sem autenticação nem contexto retorna 401")
+    void deveRetornar401QuandoNaoExisteAutenticacaoDisponivel() {
+        SecurityContextHolder.clearContext();
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> new AssinaturaMotoristaController(service).buscarMinhaAssinatura(null));
+    }
+
+    @Test
+    @DisplayName("Endpoints administrativo e de terceiro rejeitam ausência de autenticação")
+    void deveRejeitarEndpointsAdminEServicosDeTerceiroSemAutenticacao() {
+        AssinaturaMotoristaController controller = new AssinaturaMotoristaController(service);
+        AssinaturaMetadadosRequest metadados = new AssinaturaMetadadosRequest(
+                ModalidadeAssinaturaMotorista.DESENHO, null);
+
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> controller.cadastrarAssinaturaAdministrativa(99, UUID.randomUUID(),
+                        criarArquivoValido(), metadados, null));
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> controller.buscarAssinaturaPorId(99, null));
+    }
+
+    private JwtAuthenticationToken autenticacaoJwt(String subject, List<SimpleGrantedAuthority> authorities) {
+        Instant agora = Instant.now();
+        Jwt token = Jwt.withTokenValue("controller-test")
+                .header("alg", "none")
+                .subject(subject)
+                .issuedAt(agora)
+                .expiresAt(agora.plusSeconds(60))
+                .build();
+        return new JwtAuthenticationToken(token, authorities);
     }
 
     @TestConfiguration
