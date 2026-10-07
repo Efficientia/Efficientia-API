@@ -8,7 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "anomalia_desembarque", schema = "public")
+@Table(name = "tb_anomalia_desembarque", schema = "sc_operacao")
 public class AnomaliaDesembarqueEntity {
 
     @Id
