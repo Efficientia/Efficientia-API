@@ -127,9 +127,11 @@ Exemplo:
 
 ## Persistência e implantação
 
-As listas de paradas e anomalias são persistidas em tabelas próprias e devolvidas em consultas. O migration V9 adiciona destino, auditoria de atualização, chave de idempotência e quantidade de animais das anomalias. A chave recebe índice único parcial para permitir vários rascunhos sem chave e impedir reutilização entre relatórios.
+As listas de paradas e anomalias são persistidas em tabelas próprias e devolvidas em consultas. O migration V9 adiciona destino, auditoria de atualização, chave de idempotência e quantidade de animais das anomalias. A chave recebe índice único parcial para permitir vários rascunhos sem chave e impedir reutilização entre relatórios. A migration V10 converte os campos de motivo e anomalia para `VARCHAR(50)` com constraints `CHECK`, mantendo os códigos aceitos e alinhando os tipos com as entidades JPA.
 
-O erro do Render registrado em 02/10/2026 (`relation "public.veiculo_cavalo" does not exist` durante V7) ocorre quando o serviço inicia com um artefato que não cria a tabela antes de alterá-la. A V7 desta branch contém a criação idempotente das tabelas de cavalo, carreta e relatório no início. A publicação deve construir esta branch/commit; os logs precisam refletir o script versionado atual.
+O erro do Render registrado em 02/10/2026 (`relation "public.veiculo_cavalo" does not exist` durante V7) ocorre quando o serviço inicia com um artefato que não cria a tabela antes de alterá-la. A V7 desta branch contém a criação idempotente das tabelas de cavalo, carreta e relatório no início.
+
+No log de 06/10/2026, a migration V9 foi validada e aplicada com sucesso; a inicialização então falhou na validação JPA porque `assinatura_motorista.sha256` era `CHAR(64)` no PostgreSQL e estava mapeado como `VARCHAR(64)` na entidade. A entidade agora declara o tipo `CHAR`, e a V10 alinha os campos de ocorrências ao tipo `String` do JPA. O fluxo não executa mais `flyway.repair()` automaticamente em cada inicialização, preservando a validação de checksum das migrations. O baseline para bancos não vazios sem histórico está na versão 1, conforme a intenção documentada da V1.
 
 ## Critérios de aceite
 

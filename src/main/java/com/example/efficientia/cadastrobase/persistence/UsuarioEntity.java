@@ -15,7 +15,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "usuario", schema = "public")
+@Table(name = "tb_usuario", schema = "sc_corporativo")
 public class UsuarioEntity {
 
     @Id

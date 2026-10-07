@@ -22,12 +22,17 @@ Este documento registra a resolução dos impedimentos de *deploy* na infraestru
 - **Correção:** 
   - A tabela histórica do Flyway e as instâncias de domínios problemáticos (ex. `relatorio_viagem`) foram limpas no Supabase. O script unificado de *schema* foi restaurado para o seu formato normal `V1__create_relational_schema.sql` para ser reconstruído do zero.
 
-#### Falha reportada no Render em 06/10/2026
-- **Problema:** A migração `V9__adapta_banco_e_processo_assinaturas.sql` falhava com o erro PostgreSQL `42809: "tb_usuario" is not a view`. O banco já possuía uma tabela física `sc_corporativo.tb_usuario`, e `CREATE OR REPLACE VIEW` não pode substituir uma tabela.
-- **Correção:** A criação das views de compatibilidade agora verifica o tipo da relação de destino. Cria a view quando o nome está livre, atualiza quando já existe uma view e preserva tabelas ou outros tipos de relação existentes, registrando um aviso no log.
-- **Dados:** Nenhuma tabela existente é removida, renomeada ou sobrescrita por essa etapa.
-- **Aplicação:** Como a tentativa de V9 falhou durante a inicialização, o próximo deploy deve repetir a migração corrigida. A estratégia Flyway configurada na aplicação executa `repair()` antes de `migrate()` para limpar o registro da tentativa com falha.
-- **Validação local:** O empacotamento Maven terminou com sucesso. A integração PostgreSQL foi iniciada, mas o Testcontainers não encontrou um daemon Docker disponível e pulou a execução; a migração ainda precisa ser confirmada no próximo deploy.
+#### Falha de migração reportada no Render em 06/10/2026
+- **Problema:** A migração `V9__adapta_banco_e_processo_assinaturas.sql` inicialmente encontrou o erro PostgreSQL `42809: "tb_usuario" is not a view`. O banco já possuía uma tabela física `sc_corporativo.tb_usuario`, e `CREATE OR REPLACE VIEW` não pode substituir uma tabela.
+- **Correção:** A criação das views de compatibilidade verifica o tipo da relação de destino. Cria a view quando o nome está livre, atualiza quando já existe uma view e preserva tabelas ou outros tipos de relação existentes.
+- **Resultado no log seguinte:** A V9 foi validada e aplicada com sucesso, levando o schema à versão 9. A aplicação falhou depois, ao validar JPA.
+
+#### Falha de validação JPA e robustez do build
+- **Problema:** `assinatura_motorista.sha256` é `CHAR(64)` no PostgreSQL, enquanto a entidade esperava `VARCHAR(64)`. A validação seguinte também encontraria incompatibilidade entre os enums PostgreSQL das ocorrências e os campos `String` das entidades.
+- **Correção:** O campo SHA-256 agora usa o mapeamento Hibernate `CHAR`. A migration V10 converte os três campos de motivo/anomalia para `VARCHAR(50)` e mantém os códigos aceitos por constraints `CHECK`, sem editar migrations já aplicadas.
+- **Flyway:** Removido o `repair()` automático em toda inicialização; divergências de checksum agora são rejeitadas pela validação normal do Flyway. O baseline configurado como versão 1 faz bancos não vazios sem histórico ignorarem a V1, de acordo com o comentário da própria migration.
+- **Build de imagem:** O Dockerfile usa Java 17 no builder e runtime para corresponder ao `pom.xml` e ao CI, executa os testes disponíveis durante `package` e usa `.dockerignore` para excluir credenciais e artefatos locais do contexto.
+- **Validação automatizada:** `PostgresIntegrationTest` ativa explicitamente `ddl-auto=validate`, de modo que a inicialização contra PostgreSQL verifique os tipos do schema. Essa validação depende do Testcontainers e do daemon Docker no ambiente de execução.
 
 ### 4. Bateria de Testes: Adequação das Restrições do JaCoCo (80%/60%)
 - **Problema:** O código estava engessado no CI/CD com métricas de 73% de linhas (mínimo 80%) e 53% de ramificações (mínimo 60%). Era preciso blindar componentes essenciais.

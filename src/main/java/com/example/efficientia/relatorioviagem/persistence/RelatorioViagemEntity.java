@@ -16,7 +16,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 
 @Entity
-@Table(name = "relatorio_viagem", schema = "public")
+@Table(name = "tb_relatorio_viagem", schema = "sc_operacao")
 public class RelatorioViagemEntity {
 
     @Id

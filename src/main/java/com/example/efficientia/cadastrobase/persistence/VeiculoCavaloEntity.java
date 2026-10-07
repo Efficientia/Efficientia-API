@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "veiculo_cavalo", schema = "public")
+@Table(name = "tb_veiculo_cavalo", schema = "sc_frota")
 public class VeiculoCavaloEntity {
 
     @Id
