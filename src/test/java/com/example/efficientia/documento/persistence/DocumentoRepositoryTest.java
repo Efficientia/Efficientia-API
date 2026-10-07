@@ -211,6 +211,7 @@ class DocumentoRepositoryTest {
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of(
                     "hibernate.hbm2ddl.auto", "create-drop",
+                    "hibernate.hbm2ddl.create_namespaces", "true",
                     "hibernate.show_sql", "false"
             ));
             return factory;
