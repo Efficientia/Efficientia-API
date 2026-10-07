@@ -9,7 +9,7 @@ COPY src ./src
 RUN chmod +x mvnw
 RUN ./mvnw --batch-mode --no-transfer-progress clean package -DskipTests
 
-FROM cgr.dev/chainguard/jre:openjdk-17
+FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
