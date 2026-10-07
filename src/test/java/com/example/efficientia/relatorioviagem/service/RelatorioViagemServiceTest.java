@@ -4,6 +4,13 @@ import com.example.efficientia.relatorioviagem.api.CriarRelatorioViagemRequest;
 import com.example.efficientia.relatorioviagem.api.NumeroGtaDuplicadoException;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemEntity;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
+import com.example.efficientia.relatorioviagem.persistence.AnomaliaDesembarqueEntity;
+import com.example.efficientia.relatorioviagem.persistence.AnomaliaEmbarqueEntity;
+import com.example.efficientia.relatorioviagem.persistence.ParadaImprevistaEntity;
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaEntity;
+import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository;
+import com.example.efficientia.cadastrobase.persistence.UsuarioEntity;
+import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -18,13 +25,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Arrays;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -484,6 +497,509 @@ class RelatorioViagemServiceTest {
         assertEquals("GTA-EXISTENTE", response.numeroGta());
         verify(repository, never()).save(any());
     }
+
+    @Test
+    void deveAtualizarRelatorioPreservandoIdentidadeChaveEClaimsDaEmpresa() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setMotoristaId(17);
+        entity.setEmpresaId(null);
+        UUID idempotencyKey = UUID.randomUUID();
+        entity.setIdempotencyKey(idempotencyKey);
+
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("99")
+                .claim("usuario_id", "17")
+                .claim("empresa_id", 23)
+                .build();
+        var authentication = new JwtAuthenticationToken(
+                jwt, List.of(new SimpleGrantedAuthority("ROLE_FUNCIONARIO_FRIBOI"))
+        );
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.atualizar(1, requestComStatus("rascunho"), authentication, null);
+
+        ArgumentCaptor<RelatorioViagemEntity> captor = ArgumentCaptor.forClass(RelatorioViagemEntity.class);
+        verify(repository).save(captor.capture());
+        assertEquals(1, response.id());
+        assertEquals(17, response.motoristaId());
+        assertEquals(23, response.empresaId());
+        assertEquals(idempotencyKey, response.idempotencyKey());
+        assertEquals("rascunho", response.status());
+        assertEquals(17, captor.getValue().getMotoristaId());
+        assertEquals(23, captor.getValue().getEmpresaId());
+        assertEquals(idempotencyKey, captor.getValue().getIdempotencyKey());
+    }
+
+    @Test
+    void deveSubstituirParadasEAnomaliasAoAtualizarIgnorandoIdsFornecidos() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        ParadaImprevistaRepository paradaRepository = mock(ParadaImprevistaRepository.class);
+        AnomaliaEmbarqueRepository embarqueRepository = mock(AnomaliaEmbarqueRepository.class);
+        AnomaliaDesembarqueRepository desembarqueRepository = mock(AnomaliaDesembarqueRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(
+                repository, null, null, paradaRepository, embarqueRepository, desembarqueRepository
+        );
+        RelatorioViagemEntity entity = relatorioCompleto();
+        List<ParadaImprevistaEntity> paradasSalvas = new ArrayList<>();
+        List<AnomaliaEmbarqueEntity> anomaliasEmbarqueSalvas = new ArrayList<>();
+        List<AnomaliaDesembarqueEntity> anomaliasDesembarqueSalvas = new ArrayList<>();
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(paradaRepository.save(any(ParadaImprevistaEntity.class))).thenAnswer(invocation -> {
+            ParadaImprevistaEntity saved = invocation.getArgument(0);
+            paradasSalvas.add(saved);
+            return saved;
+        });
+        when(embarqueRepository.save(any(AnomaliaEmbarqueEntity.class))).thenAnswer(invocation -> {
+            AnomaliaEmbarqueEntity saved = invocation.getArgument(0);
+            anomaliasEmbarqueSalvas.add(saved);
+            return saved;
+        });
+        when(desembarqueRepository.save(any(AnomaliaDesembarqueEntity.class))).thenAnswer(invocation -> {
+            AnomaliaDesembarqueEntity saved = invocation.getArgument(0);
+            anomaliasDesembarqueSalvas.add(saved);
+            return saved;
+        });
+        when(paradaRepository.findByRelatorioId(1)).thenReturn(paradasSalvas);
+        when(embarqueRepository.findByRelatorioId(1)).thenReturn(anomaliasEmbarqueSalvas);
+        when(desembarqueRepository.findByRelatorioId(1)).thenReturn(anomaliasDesembarqueSalvas);
+
+        LocalDateTime inicio = LocalDateTime.of(2026, 8, 20, 9, 0);
+        LocalDateTime fim = inicio.plusMinutes(30);
+        var request = requestComFilhos(
+                requestComStatus("rascunho"),
+                Arrays.asList(
+                        new ParadaImprevistaDto(501, " Pneu furado ", inicio, fim),
+                        null,
+                        new ParadaImprevistaDto(502, null, inicio, fim),
+                        new ParadaImprevistaDto(503, "Sem fim", inicio, null),
+                        new ParadaImprevistaDto(504, "Sem início", null, fim)
+                ),
+                Arrays.asList(
+                        new AnomaliaItemDto(601, " mancando ", "animal", 2),
+                        null,
+                        new AnomaliaItemDto(602, "   ", null, 1),
+                        new AnomaliaItemDto(603, null, null, 1)
+                ),
+                Arrays.asList(
+                        new AnomaliaItemDto(701, " outros_atos_abuso ", "observação", 1),
+                        null,
+                        new AnomaliaItemDto(702, "", null, 1),
+                        new AnomaliaItemDto(703, null, null, 1)
+                )
+        );
+
+        var response = service.atualizar(1, request, null, null);
+
+        verify(paradaRepository).deleteByRelatorioId(1);
+        verify(embarqueRepository).deleteByRelatorioId(1);
+        verify(desembarqueRepository).deleteByRelatorioId(1);
+        assertEquals(1, paradasSalvas.size());
+        assertEquals(1, anomaliasEmbarqueSalvas.size());
+        assertEquals(1, anomaliasDesembarqueSalvas.size());
+        assertNull(paradasSalvas.get(0).getId());
+        assertNull(anomaliasEmbarqueSalvas.get(0).getId());
+        assertNull(anomaliasDesembarqueSalvas.get(0).getId());
+        assertEquals(1, paradasSalvas.get(0).getRelatorioId());
+        assertEquals(1, anomaliasEmbarqueSalvas.get(0).getRelatorioId());
+        assertEquals(1, anomaliasDesembarqueSalvas.get(0).getRelatorioId());
+        assertEquals("Pneu furado", paradasSalvas.get(0).getMotivo());
+        assertEquals("mancando", anomaliasEmbarqueSalvas.get(0).getAnomalia());
+        assertEquals("outros_atos_abuso", anomaliasDesembarqueSalvas.get(0).getAnomalia());
+        assertEquals(1, response.paradasImprevistas().size());
+        assertNull(response.paradasImprevistas().get(0).id());
+        assertEquals(1, response.anomaliasEmbarque().size());
+        assertNull(response.anomaliasEmbarque().get(0).id());
+        assertEquals(1, response.anomaliasDesembarque().size());
+        assertNull(response.anomaliasDesembarque().get(0).id());
+    }
+
+    @Test
+    void deveAtualizarParaConcluidoERegistrarDatasDeEnvioEFinalizacao() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        UUID idempotencyKey = UUID.randomUUID();
+        LocalDateTime criadoEm = LocalDateTime.of(2026, 8, 1, 10, 0);
+        entity.setCriadoEm(criadoEm);
+        entity.setIdempotencyKey(idempotencyKey);
+        entity.setUrlAssinaturaMotorista("assinatura-fixa-motorista");
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.findByIdempotencyKey(idempotencyKey)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = service.atualizar(
+                1, requestComStatus("concluido"), null, idempotencyKey
+        );
+
+        assertEquals(1, response.id());
+        assertEquals("concluido", response.status());
+        assertEquals(idempotencyKey, response.idempotencyKey());
+        assertEquals(criadoEm, entity.getCriadoEm());
+        assertEquals("assinatura-fixa-motorista", response.urlAssinaturaMotorista());
+        assertNotNull(response.enviadoEm());
+        assertNotNull(response.finalizadoEm());
+        assertTrue(!response.finalizadoEm().isBefore(response.enviadoEm()));
+        verify(repository).save(entity);
+    }
+
+    @Test
+    void deveCobrirCriacaoFinalComStatusEChavesDeIdempotencia() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        UsuarioRepository usuarioRepository = mock(UsuarioRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository, usuarioRepository, null);
+        var request = requestComStatus("pendente");
+        UUID key = UUID.randomUUID();
+
+        UsuarioEntity motorista = new UsuarioEntity();
+        motorista.setUrlAssinaturaGeral("assinatura-fixa-motorista");
+        when(usuarioRepository.findById(3)).thenReturn(java.util.Optional.of(motorista));
+
+        assertThrows(ValidacaoDiarioRotaException.class, () -> service.criar(request, null, null));
+        assertThrows(ValidacaoDiarioRotaException.class, () -> service.criar(requestComStatus("rascunho"), null, key));
+        verify(repository, never()).save(any(RelatorioViagemEntity.class));
+
+        when(repository.findByIdempotencyKey(key)).thenReturn(java.util.Optional.empty());
+        when(repository.existsByNumeroGta("GTA-EXISTENTE")).thenReturn(false);
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> {
+            RelatorioViagemEntity saved = invocation.getArgument(0);
+            saved.setId(71);
+            return saved;
+        });
+        var response = service.criar(requestComGta(request, "GTA-EXISTENTE"), null, key);
+
+        assertEquals("pendente", response.status());
+        assertEquals(key, response.idempotencyKey());
+        assertNotNull(response.enviadoEm());
+        assertNull(response.finalizadoEm());
+        verify(repository).existsByNumeroGta("GTA-EXISTENTE");
+
+        for (String finalStatus : List.of("aprovado", "concluido")) {
+            RelatorioViagemRepository finalRepository = mock(RelatorioViagemRepository.class);
+            UsuarioRepository finalUsuarioRepository = mock(UsuarioRepository.class);
+            RelatorioViagemService finalService = new RelatorioViagemService(finalRepository, finalUsuarioRepository, null);
+            UUID finalKey = UUID.randomUUID();
+            UsuarioEntity finalMotorista = new UsuarioEntity();
+            finalMotorista.setUrlAssinaturaGeral("assinatura-fixa-motorista");
+            when(finalUsuarioRepository.findById(3)).thenReturn(java.util.Optional.of(finalMotorista));
+            when(finalRepository.findByIdempotencyKey(finalKey)).thenReturn(java.util.Optional.empty());
+            when(finalRepository.existsByNumeroGta("GTA-1")).thenReturn(false);
+            when(finalRepository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> {
+                RelatorioViagemEntity saved = invocation.getArgument(0);
+                saved.setId(72);
+                return saved;
+            });
+
+            var finalResponse = finalService.criar(requestComStatus(finalStatus), null, finalKey);
+            assertEquals(finalStatus, finalResponse.status());
+            assertNotNull(finalResponse.enviadoEm());
+            assertNotNull(finalResponse.finalizadoEm());
+        }
+    }
+
+    @Test
+    void deveRejeitarGtaDuplicadaAoCriarEAtualizar() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        when(repository.existsByNumeroGta("GTA-1")).thenReturn(true);
+        assertThrows(NumeroGtaDuplicadoException.class, () -> service.criar(requestValido()));
+
+        RelatorioViagemEntity entity = relatorioCompleto();
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.existsByNumeroGta("GTA-ALTERADA")).thenReturn(true);
+        assertThrows(NumeroGtaDuplicadoException.class,
+                () -> service.atualizar(1, requestComGta(requestComStatus("rascunho"), "GTA-ALTERADA"), null, null));
+        verify(repository, never()).save(any(RelatorioViagemEntity.class));
+    }
+
+    @Test
+    void deveAtualizarRascunhoPreservandoStatusQuandoCampoVemNuloOuEmBranco() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setNumeroGta("gta-1");
+        entity.setStatus("rascunho");
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var statusNulo = service.atualizar(1,
+                requestComGta(requestComStatus(null), "GTA-1"), null, null);
+        var statusEmBranco = service.atualizar(1,
+                requestComGta(requestComStatus("   "), "GTA-1"), null, null);
+
+        assertEquals("rascunho", statusNulo.status());
+        assertEquals("rascunho", statusEmBranco.status());
+        verify(repository, never()).existsByNumeroGta("GTA-1");
+        verify(repository, org.mockito.Mockito.times(2)).save(entity);
+    }
+
+    @Test
+    void deveRetornarTodosOsErrosObrigatoriosNaSubmissaoFinalParcial() {
+        RelatorioViagemService service = new RelatorioViagemService(mock(RelatorioViagemRepository.class));
+
+        ValidacaoDiarioRotaException ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> service.validarCoerenciaDiarioRota(requestParcial(), true));
+
+        assertTrue(ex.getFieldErrors().containsKey("fazendaId"));
+        assertTrue(ex.getFieldErrors().containsKey("numeroGta"));
+        assertTrue(ex.getFieldErrors().containsKey("horarioDesembarque"));
+        assertTrue(ex.getFieldErrors().containsKey("quantidadeEmergencia"));
+        assertTrue(ex.getFieldErrors().containsKey("totalAnimais"));
+    }
+
+    @Test
+    void deveInformarPapeisComAssinaturaEmBrancoComoPendentes() {
+        RelatorioViagemService service = new RelatorioViagemService(mock(RelatorioViagemRepository.class));
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setUrlAssinaturaPecuarista(" ");
+        entity.setUrlAssinaturaMotorista("\t");
+        entity.setUrlAssinaturaManobrista("");
+        entity.setUrlAssinaturaCurraleiro("  ");
+
+        var ex = assertThrows(com.example.efficientia.relatorioviagem.api.AssinaturasIncompletasException.class,
+                () -> service.validarAssinaturasObrigatorias(entity));
+
+        assertEquals(List.of("Pecuarista", "Motorista", "Manobrista", "Curraleiro"), ex.getPapeisFaltantes());
+    }
+
+    @Test
+    void deveCobrirTransicoesDeStatusPendenteEFinalizacaoComChaveVinculada() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setUrlAssinaturaPecuarista("pec");
+        entity.setUrlAssinaturaMotorista("mot");
+        entity.setUrlAssinaturaManobrista("man");
+        entity.setUrlAssinaturaCurraleiro("cur");
+        UUID key = UUID.randomUUID();
+        entity.setIdempotencyKey(key);
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.findByIdempotencyKey(key)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        var enviado = service.enviarParaAnalise(1, key);
+        assertEquals("pendente", enviado.status());
+        assertNotNull(enviado.enviadoEm());
+        var reenviado = service.atualizarStatus(1, " pendente ", key);
+        assertEquals(enviado.enviadoEm(), reenviado.enviadoEm());
+        var aprovado = service.atualizarStatus(1, "aprovado", key);
+        assertNotNull(aprovado.finalizadoEm());
+        assertEquals("aprovado", aprovado.status());
+        verify(repository, org.mockito.Mockito.times(3)).save(entity);
+    }
+
+    @Test
+    void deveCobrirFallbacksDoJwtEAutenticacaoSemClaimsValidas() {
+        UsuarioRepository usuarioRepository = mock(UsuarioRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(
+                mock(RelatorioViagemRepository.class), usuarioRepository, null
+        );
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setEmpresaId(44);
+        when(usuarioRepository.findById(23)).thenReturn(java.util.Optional.of(usuario));
+
+        Jwt jwt = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject(" 23 ")
+                .claim("usuario_id", "nao-numero")
+                .claim("empresa_id", "tambem-nao-numero")
+                .build();
+        var authentication = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_FUNCIONARIO")));
+        assertEquals(23, service.extrairUsuarioId(authentication));
+        assertEquals(44, service.extrairEmpresaId(authentication, 23));
+
+        var unsupportedAuthentication = new UsernamePasswordAuthenticationToken("usuario", "senha");
+        assertNull(service.extrairUsuarioId(unsupportedAuthentication));
+        assertEquals(44, service.extrairEmpresaId(unsupportedAuthentication, 23));
+        assertNull(service.extrairEmpresaId(unsupportedAuthentication, null));
+
+        Jwt semIds = Jwt.withTokenValue("token")
+                .header("alg", "none")
+                .subject("id-invalido")
+                .claim("usuario_id", " ")
+                .build();
+        assertNull(service.extrairUsuarioId(new JwtAuthenticationToken(semIds)));
+    }
+
+    @Test
+    void deveImpedirCriacaoAutenticadaSemIdEAtualizacaoDeRelatorioAprovado() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        var jwtSemId = Jwt.withTokenValue("token").header("alg", "none").claim("irrelevante", "sem-id").build();
+        var semId = new JwtAuthenticationToken(jwtSemId);
+        ValidacaoDiarioRotaException ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> service.criar(requestParcial(), semId, null));
+        assertTrue(ex.getFieldErrors().containsKey("motoristaId"));
+
+        RelatorioViagemEntity aprovado = relatorioCompleto();
+        aprovado.setStatus("aprovado");
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(aprovado));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.atualizar(1, requestComStatus("rascunho"), null, null));
+        verify(repository, never()).save(any(RelatorioViagemEntity.class));
+    }
+
+    @Test
+    void deveUsarAssinaturaFixaDaContaOuFallbackDoRepositorio() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        UsuarioRepository usuarioRepository = mock(UsuarioRepository.class);
+        AssinaturaMotoristaRepository assinaturaRepository = mock(AssinaturaMotoristaRepository.class);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setUrlAssinaturaMotorista(null);
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setUrlAssinaturaGeral("   ");
+        when(usuarioRepository.findById(3)).thenReturn(java.util.Optional.of(usuario));
+        AssinaturaMotoristaEntity assinatura = new AssinaturaMotoristaEntity();
+        when(assinaturaRepository.findByMotoristaIdAndAtivaTrue(3)).thenReturn(java.util.Optional.of(assinatura));
+
+        var response = new RelatorioViagemService(repository, usuarioRepository, assinaturaRepository)
+                .registrarAssinaturas(1, new com.example.efficientia.relatorioviagem.api.RegistrarAssinaturasRequest(
+                        " ", null, " ", " ", false
+                ));
+        assertEquals("/api/v1/usuarios/3/assinatura/conteudo", response.urlAssinaturaMotorista());
+
+        RelatorioViagemEntity withoutDriverId = relatorioCompleto();
+        withoutDriverId.setId(3);
+        withoutDriverId.setMotoristaId(null);
+        withoutDriverId.setUrlAssinaturaMotorista(null);
+        when(repository.findById(3)).thenReturn(java.util.Optional.of(withoutDriverId));
+        var noSignature = new RelatorioViagemService(repository, null, null)
+                .registrarAssinaturas(3, new com.example.efficientia.relatorioviagem.api.RegistrarAssinaturasRequest(
+                        null, null, null, null, false
+                ));
+        assertNull(noSignature.urlAssinaturaMotorista());
+
+        RelatorioViagemEntity entityWithFixedSignature = relatorioCompleto();
+        entityWithFixedSignature.setUrlAssinaturaMotorista(null);
+        when(repository.findById(2)).thenReturn(java.util.Optional.of(entityWithFixedSignature));
+        UsuarioEntity usuarioWithSignature = new UsuarioEntity();
+        usuarioWithSignature.setUrlAssinaturaGeral("assinatura-conta");
+        when(usuarioRepository.findById(3)).thenReturn(java.util.Optional.of(usuarioWithSignature));
+        var fromAccount = new RelatorioViagemService(repository, usuarioRepository, assinaturaRepository)
+                .registrarAssinaturaPapel(2, "MOTORISTA", "cliente-nao-pode-substituir");
+        assertEquals("assinatura-conta", fromAccount.urlAssinaturaMotorista());
+        verify(assinaturaRepository).findByMotoristaIdAndAtivaTrue(3);
+    }
+
+    @Test
+    void deveCobrirGuardasDeCoerenciaComCamposTemporaisOpcionais() {
+        RelatorioViagemService service = new RelatorioViagemService(mock(RelatorioViagemRepository.class));
+        CriarRelatorioViagemRequest base = requestComStatus("rascunho");
+        LocalDate data = LocalDate.of(2026, 8, 20);
+        LocalTime embarque = LocalTime.of(8, 0);
+        LocalTime saida = LocalTime.of(8, 30);
+        LocalTime chegada = LocalTime.of(12, 0);
+        LocalTime desembarque = LocalTime.of(12, 30);
+
+        List<CriarRelatorioViagemRequest> requests = List.of(
+                requestComTempos(base, null, embarque, saida, data, chegada, desembarque, 100, 200),
+                requestComTempos(base, data, null, saida, data, chegada, desembarque, 100, 200),
+                requestComTempos(base, data, embarque, null, data, chegada, desembarque, 100, 200),
+                requestComTempos(base, null, embarque, saida, data, chegada, desembarque, null, 200),
+                requestComTempos(base, data, embarque, saida, null, chegada, desembarque, 100, null),
+                requestComTempos(base, data, embarque, saida, data, null, desembarque, 100, 200),
+                requestComTempos(base, data, embarque, saida, data, chegada, null, 100, 200)
+        );
+        requests.forEach(request -> service.validarCoerenciaDiarioRota(request, false));
+    }
+
+    @Test
+    void deveAceitarEmergenciaComMotivoEValidarIgualdadeDeHorarioEQuilometragem() {
+        RelatorioViagemService service = new RelatorioViagemService(mock(RelatorioViagemRepository.class));
+        CriarRelatorioViagemRequest request = requestComValores(
+                "pendente", LocalTime.of(8, 0), LocalTime.of(8, 0), LocalTime.of(12, 0),
+                100, 10, 8, 0, 17, 0, 0, 1, "Animal ferido"
+        );
+        service.validarCoerenciaDiarioRota(request, true);
+    }
+
+    @Test
+    void deveValidarCamposCompletosERejeitarQuilometragemInconsistenteNaMudancaDeStatus() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setUrlAssinaturaPecuarista("pec");
+        entity.setUrlAssinaturaMotorista("mot");
+        entity.setUrlAssinaturaManobrista("man");
+        entity.setUrlAssinaturaCurraleiro("cur");
+        UUID key = UUID.randomUUID();
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.findByIdempotencyKey(key)).thenReturn(java.util.Optional.empty());
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertEquals("pendente", service.atualizarStatus(1, "pendente", key).status());
+
+        RelatorioViagemEntity inconsistent = relatorioCompleto();
+        inconsistent.setUrlAssinaturaPecuarista("pec");
+        inconsistent.setUrlAssinaturaMotorista("mot");
+        inconsistent.setUrlAssinaturaManobrista("man");
+        inconsistent.setUrlAssinaturaCurraleiro("cur");
+        inconsistent.setKmChegadaDesembarcadouro(90);
+        when(repository.findById(2)).thenReturn(java.util.Optional.of(inconsistent));
+        ValidacaoDiarioRotaException ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> service.atualizarStatus(2, "pendente", UUID.randomUUID()));
+        assertTrue(ex.getFieldErrors().containsKey("kmChegadaDesembarcadouro"));
+    }
+
+    private CriarRelatorioViagemRequest requestComGta(CriarRelatorioViagemRequest base, String gta) {
+        return new CriarRelatorioViagemRequest(
+                base.fazendaId(), base.unidadeFrigorificaId(), base.motoristaId(), base.manobristaId(),
+                base.curraleiroId(), base.cavaloId(), base.carretaId(), base.placaCavalo(), base.placaCarreta(),
+                gta, base.numeroNotaFiscal(), base.dataEmbarque(), base.horarioEmbarque(),
+                base.horarioSaidaPropriedade(), base.kmSaidaEmbarcadouro(), base.dataChegadaUnidade(),
+                base.horarioChegadaUnidade(), base.horarioDesembarque(), base.kmChegadaDesembarcadouro(),
+                base.numeroCurral(), base.sireneReFuncionou(), base.quantidadeMachos(), base.quantidadeFemeas(),
+                base.quantidadeMarrucos(), base.quantidadeEmPe(), base.quantidadeDeitado(), base.quantidadeMorto(),
+                base.quantidadeEmergencia(), base.motivoEmergencia(), base.comentarios(),
+                base.urlAssinaturaPecuarista(), base.urlAssinaturaMotorista(), base.urlAssinaturaManobrista(),
+                base.urlAssinaturaCurraleiro(), base.capacidadeCargaUtilizada(), base.urlLaudoMortalidade(),
+                base.status(), base.paradasImprevistas(), base.anomaliasEmbarque(), base.anomaliasDesembarque()
+        );
+    }
+
+    private CriarRelatorioViagemRequest requestComTempos(
+            CriarRelatorioViagemRequest base, LocalDate dataEmbarque,
+            LocalTime horarioEmbarque, LocalTime horarioSaida,
+            LocalDate dataChegada, LocalTime horarioChegada,
+            LocalTime horarioDesembarque, Integer kmSaida, Integer kmChegada
+    ) {
+        return new CriarRelatorioViagemRequest(
+                base.fazendaId(), base.unidadeFrigorificaId(), base.motoristaId(), base.manobristaId(),
+                base.curraleiroId(), base.cavaloId(), base.carretaId(), base.placaCavalo(), base.placaCarreta(),
+                base.numeroGta(), base.numeroNotaFiscal(), dataEmbarque, horarioEmbarque, horarioSaida,
+                kmSaida, dataChegada, horarioChegada, horarioDesembarque, kmChegada, base.numeroCurral(),
+                base.sireneReFuncionou(), base.quantidadeMachos(), base.quantidadeFemeas(), base.quantidadeMarrucos(),
+                base.quantidadeEmPe(), base.quantidadeDeitado(), base.quantidadeMorto(), base.quantidadeEmergencia(),
+                base.motivoEmergencia(), base.comentarios(), base.urlAssinaturaPecuarista(),
+                base.urlAssinaturaMotorista(), base.urlAssinaturaManobrista(), base.urlAssinaturaCurraleiro(),
+                base.capacidadeCargaUtilizada(), base.urlLaudoMortalidade(), base.status(),
+                base.paradasImprevistas(), base.anomaliasEmbarque(), base.anomaliasDesembarque()
+        );
+    }
+
+    private CriarRelatorioViagemRequest requestComValores(
+            String status, LocalTime horarioEmbarque, LocalTime horarioSaida,
+            LocalTime horarioDesembarque, int kmSaida, int machos, int femeas,
+            int marrucos, int emPe, int deitado, int morto, int emergencia, String motivo
+    ) {
+        return new CriarRelatorioViagemRequest(
+                1, 2, 3, 4, 5, 6, 7, null, null, "GTA-1", "NF-1",
+                LocalDate.of(2026, 8, 20), horarioEmbarque, horarioSaida, kmSaida,
+                LocalDate.of(2026, 8, 20), LocalTime.of(12, 0), horarioDesembarque, 200,
+                "C1", true, machos, femeas, marrucos, emPe, deitado, morto, emergencia,
+                motivo, null, "pec", "mot", "man", "cur", null, null, status, null, null, null
+        );
+    }
+
     private CriarRelatorioViagemRequest requestValido() {
         return new CriarRelatorioViagemRequest(
                 1, 2, 3, 4, 5, 6,
@@ -543,6 +1059,28 @@ class RelatorioViagemServiceTest {
                 valido.urlAssinaturaPecuarista(), valido.urlAssinaturaMotorista(), valido.urlAssinaturaManobrista(),
                 valido.urlAssinaturaCurraleiro(), valido.capacidadeCargaUtilizada(), valido.urlLaudoMortalidade(),
                 status, valido.paradasImprevistas(), valido.anomaliasEmbarque(), valido.anomaliasDesembarque()
+        );
+    }
+
+    private CriarRelatorioViagemRequest requestComFilhos(
+            CriarRelatorioViagemRequest request,
+            List<ParadaImprevistaDto> paradas,
+            List<AnomaliaItemDto> anomaliasEmbarque,
+            List<AnomaliaItemDto> anomaliasDesembarque
+    ) {
+        return new CriarRelatorioViagemRequest(
+                request.fazendaId(), request.unidadeFrigorificaId(), request.motoristaId(), request.manobristaId(),
+                request.curraleiroId(), request.cavaloId(), request.carretaId(), request.placaCavalo(),
+                request.placaCarreta(), request.numeroGta(), request.numeroNotaFiscal(), request.dataEmbarque(),
+                request.horarioEmbarque(), request.horarioSaidaPropriedade(), request.kmSaidaEmbarcadouro(),
+                request.dataChegadaUnidade(), request.horarioChegadaUnidade(), request.horarioDesembarque(),
+                request.kmChegadaDesembarcadouro(), request.numeroCurral(), request.sireneReFuncionou(),
+                request.quantidadeMachos(), request.quantidadeFemeas(), request.quantidadeMarrucos(),
+                request.quantidadeEmPe(), request.quantidadeDeitado(), request.quantidadeMorto(),
+                request.quantidadeEmergencia(), request.motivoEmergencia(), request.comentarios(),
+                request.urlAssinaturaPecuarista(), request.urlAssinaturaMotorista(), request.urlAssinaturaManobrista(),
+                request.urlAssinaturaCurraleiro(), request.capacidadeCargaUtilizada(), request.urlLaudoMortalidade(),
+                request.status(), paradas, anomaliasEmbarque, anomaliasDesembarque
         );
     }
 

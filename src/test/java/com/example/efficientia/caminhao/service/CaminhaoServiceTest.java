@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -621,5 +622,341 @@ class CaminhaoServiceTest {
         assertFalse(response.emUso());
         assertEquals("Desconhecido", response.motoristaNome());
         assertEquals("DISPONIVEL", response.cavalo().statusUso());
+    }
+
+    @Test
+    @DisplayName("Deve preencher valores padrão do cavalo quando não informados")
+    void deveCriarCavaloComValoresPadrao() {
+        when(veiculoCavaloRepository.existsByPlaca("ABC1D23")).thenReturn(false);
+        when(veiculoCavaloRepository.save(any(VeiculoCavaloEntity.class))).thenAnswer(invocation -> {
+            VeiculoCavaloEntity entity = invocation.getArgument(0);
+            entity.setId(101);
+            return entity;
+        });
+
+        CaminhaoResponse response = service.criarCaminhao(new CriarCaminhaoRequest(
+                TipoVeiculo.CAVALO, " abc1d23 ", null, 9, null, null,
+                "Volvo", "FH", 2024, null, null, null));
+
+        assertEquals("ABC1D23", response.placa());
+        assertEquals(0, response.kmAcumulado());
+        assertEquals(LocalDate.now().plusDays(30), response.dataVencimentoInspecao());
+        assertTrue(response.ativo());
+    }
+
+    @Test
+    @DisplayName("Deve cobrir validações de placas duplicadas e capacidade ausente")
+    void deveRejeitarDuplicidadesDeCarretaEConjunto() {
+        when(veiculoCarretaRepository.existsByPlaca("XYZ9W87")).thenReturn(true);
+        when(veiculoCavaloRepository.existsByPlaca("ABC1D23")).thenReturn(true);
+
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CARRETA, "XYZ9W87", null, 1, 40, null,
+                        null, null, null, null, null, true)));
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CONJUNTO, "ABC1D23", "NEW2C22", 1, 40, null,
+                        null, null, null, null, null, true)));
+
+        when(veiculoCavaloRepository.existsByPlaca("DEF4G56")).thenReturn(false);
+        when(veiculoCarretaRepository.existsByPlaca("NEW2C22")).thenReturn(true);
+        assertThrows(CadastroDuplicadoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CONJUNTO, "DEF4G56", "NEW2C22", 1, 40, null,
+                        null, null, null, null, null, true)));
+
+        assertThrows(CadastroInvalidoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CARRETA, "ABC1D23", null, 1, null, null,
+                        null, null, null, null, null, false)));
+        when(veiculoCavaloRepository.existsByPlaca("GHI7J89")).thenReturn(false);
+        when(veiculoCarretaRepository.existsByPlaca("KLM1N23")).thenReturn(false);
+        assertThrows(CadastroInvalidoException.class, () -> service.criarCaminhao(
+                new CriarCaminhaoRequest(TipoVeiculo.CONJUNTO, "GHI7J89", "KLM1N23", 1, null, null,
+                        null, null, null, null, null, false)));
+        verify(veiculoCavaloRepository, never()).save(any());
+        verify(veiculoCarretaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Deve cadastrar carreta e conjunto com inspeção padrão e status inativo")
+    void deveCriarCarretaEConjuntoComValoresOpcionais() {
+        when(veiculoCarretaRepository.existsByPlaca("XYZ9W87")).thenReturn(false);
+        when(veiculoCavaloRepository.existsByPlaca("ABC1D23")).thenReturn(false);
+        when(veiculoCarretaRepository.existsByPlaca("DEF4G56")).thenReturn(false);
+        when(veiculoCarretaRepository.save(any(VeiculoCarretaEntity.class))).thenAnswer(invocation -> {
+            VeiculoCarretaEntity entity = invocation.getArgument(0);
+            entity.setId(102);
+            return entity;
+        });
+        when(veiculoCavaloRepository.save(any(VeiculoCavaloEntity.class))).thenAnswer(invocation -> {
+            VeiculoCavaloEntity entity = invocation.getArgument(0);
+            entity.setId(103);
+            return entity;
+        });
+
+        CaminhaoResponse carretaResponse = service.criarCaminhao(new CriarCaminhaoRequest(
+                TipoVeiculo.CARRETA, "XYZ9W87", null, 9, 40, null,
+                "Randon", "Gaiola", 2024, "Boiadeira", null, false));
+        CaminhaoResponse conjuntoResponse = service.criarCaminhao(new CriarCaminhaoRequest(
+                TipoVeiculo.CONJUNTO, "ABC1D23", "DEF4G56", 9, 40, null,
+                "Volvo", "FH", 2024, "Boiadeira", null, false));
+
+        assertFalse(carretaResponse.ativo());
+        assertEquals(LocalDate.now().plusDays(30), carretaResponse.dataVencimentoInspecao());
+        assertFalse(conjuntoResponse.ativo());
+        assertEquals(0, conjuntoResponse.kmAcumulado());
+        assertEquals(LocalDate.now().plusDays(30), conjuntoResponse.dataVencimentoInspecao());
+        verify(veiculoCavaloRepository).save(any(VeiculoCavaloEntity.class));
+        verify(veiculoCarretaRepository, org.mockito.Mockito.times(2)).save(any(VeiculoCarretaEntity.class));
+    }
+
+    @Test
+    @DisplayName("Deve listar os dois tipos sem filtros e ignorar relatório sem veículos")
+    void deveListarSemRelatoriosEComReferenciasNulas() {
+        RelatorioViagemEntity semVeiculos = new RelatorioViagemEntity();
+        semVeiculos.setId(90);
+        when(relatorioViagemRepository.findByStatusIn(any())).thenReturn(List.of(semVeiculos));
+        VeiculoCavaloEntity cavalo = cavalo(91, "AAA1A11");
+        cavalo.setEmpresaId(8);
+        VeiculoCarretaEntity carreta = carreta(92, "BBB2B22");
+        carreta.setEmpresaId(8);
+        VeiculoCarretaEntity outraEmpresa = carreta(93, "CCC3C33");
+        outraEmpresa.setEmpresaId(9);
+        when(veiculoCavaloRepository.findAll()).thenReturn(List.of(cavalo));
+        when(veiculoCarretaRepository.findAll()).thenReturn(List.of(carreta, outraEmpresa));
+
+        List<CaminhaoResponse> responses = service.listarCaminhoes(8, null, null);
+
+        assertEquals(2, responses.size());
+        assertTrue(responses.stream().allMatch(response -> "DISPONIVEL".equals(response.statusUso())));
+        verify(usuarioRepository).findAllById(any());
+
+        when(relatorioViagemRepository.findByStatusIn(any())).thenReturn(List.of());
+        assertTrue(service.listarCaminhoes(8, null, null).size() == 2);
+        verify(usuarioRepository).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("Deve buscar caminhões por tipo explícito e inferir cavalo sem tipo")
+    void deveBuscarPorIdComTipoExplicitoOuInferido() {
+        VeiculoCavaloEntity cavalo = cavalo(93, "CCC3C33");
+        VeiculoCarretaEntity carreta = carreta(94, "DDD4D44");
+        when(veiculoCavaloRepository.findById(93)).thenReturn(Optional.of(cavalo));
+        when(veiculoCarretaRepository.findById(94)).thenReturn(Optional.of(carreta));
+        when(relatorioViagemRepository.findFirstByCavaloIdAndStatusInOrderByCriadoEmDesc(eq(93), any()))
+                .thenReturn(Optional.empty());
+        when(relatorioViagemRepository.findFirstByCarretaIdAndStatusInOrderByCriadoEmDesc(eq(94), any()))
+                .thenReturn(Optional.empty());
+
+        assertEquals("CAVALO", service.buscarCaminhaoPorId("CAVALO", 93).tipo());
+        assertEquals("CAVALO", service.buscarCaminhaoPorId(null, 93).tipo());
+        assertEquals("CARRETA", service.buscarCaminhaoPorId("CARRETA", 94).tipo());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoPorId("CAVALO", 404));
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar atualização do cavalo com placa duplicada e aceitar campos omitidos")
+    void deveValidarAtualizacaoDeCavalo() {
+        VeiculoCavaloEntity cavalo = cavalo(95, "EEE5E55");
+        when(veiculoCavaloRepository.findById(95)).thenReturn(Optional.of(cavalo));
+        when(veiculoCavaloRepository.save(any(VeiculoCavaloEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(veiculoCavaloRepository.existsByPlacaAndIdNot("FFF6F66", 95)).thenReturn(true);
+
+        assertThrows(CadastroDuplicadoException.class, () -> service.atualizarCaminhao("CAVALO", 95,
+                new AtualizarCaminhaoRequest("fff6f66", null, null, null, null, null,
+                        null, null, null, null)));
+
+        CaminhaoResponse response = service.atualizarCaminhao("CAVALO", 95,
+                new AtualizarCaminhaoRequest("   ", null, null, null, null, null,
+                        null, null, null, null));
+        assertEquals("EEE5E55", response.placa());
+
+        LocalDate novaInspecao = LocalDate.now().plusDays(45);
+        response = service.atualizarCaminhao("CAVALO", 95,
+                new AtualizarCaminhaoRequest(null, null, null, null, null, null,
+                        null, null, novaInspecao, null));
+        assertEquals(novaInspecao, response.dataVencimentoInspecao());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.atualizarCaminhao("CAVALO", 404,
+                new AtualizarCaminhaoRequest(null, null, null, null, null, null,
+                        null, null, null, null)));
+        verify(veiculoCavaloRepository, times(2)).save(cavalo);
+    }
+
+    @Test
+    @DisplayName("Deve localizar cavalo por placa e rejeitar placa nula")
+    void deveBuscarCavaloPorPlacaEValidarPlacaNula() {
+        VeiculoCavaloEntity cavalo = cavalo(104, "ABC1D23");
+        RelatorioViagemEntity relatorio = new RelatorioViagemEntity();
+        relatorio.setId(105);
+        relatorio.setMotoristaId(106);
+        relatorio.setStatus("pendente");
+        UsuarioEntity motorista = new UsuarioEntity();
+        motorista.setId(106);
+        motorista.setNome("Joana motorista");
+        when(veiculoCavaloRepository.findByPlaca("ABC1D23")).thenReturn(Optional.of(cavalo));
+        when(relatorioViagemRepository.findFirstByCavaloIdAndStatusInOrderByCriadoEmDesc(eq(104), any()))
+                .thenReturn(Optional.of(relatorio));
+        when(usuarioRepository.findById(106)).thenReturn(Optional.of(motorista));
+
+        CaminhaoResponse response = service.buscarCaminhaoPorPlaca(" abc1d23 ");
+
+        assertEquals("CAVALO", response.tipo());
+        assertEquals("EM_USO", response.statusUso());
+        assertEquals("Joana motorista", response.motoristaAtualNome());
+        assertThrows(CadastroInvalidoException.class, () -> service.buscarCaminhaoPorPlaca(null));
+    }
+
+    @Test
+    @DisplayName("Deve mapear carreta em uso mesmo sem localizar o motorista")
+    void deveBuscarCarretaEmUsoSemEncontrarMotorista() {
+        VeiculoCarretaEntity carreta = carreta(107, "XYZ9W87");
+        RelatorioViagemEntity relatorio = new RelatorioViagemEntity();
+        relatorio.setId(108);
+        relatorio.setMotoristaId(109);
+        relatorio.setStatus("pendente");
+        when(veiculoCavaloRepository.findByPlaca("XYZ9W87")).thenReturn(Optional.empty());
+        when(veiculoCarretaRepository.findByPlaca("XYZ9W87")).thenReturn(Optional.of(carreta));
+        when(relatorioViagemRepository.findFirstByCarretaIdAndStatusInOrderByCriadoEmDesc(eq(107), any()))
+                .thenReturn(Optional.of(relatorio));
+
+        CaminhaoResponse response = service.buscarCaminhaoPorPlaca("xyz9w87");
+
+        assertEquals("CARRETA", response.tipo());
+        assertEquals("EM_USO", response.statusUso());
+        assertNull(response.motoristaAtualNome());
+    }
+
+    @Test
+    @DisplayName("Deve lançar erro ao remover cavalo inexistente")
+    void deveFalharRemocaoDeCavaloInexistente() {
+        assertThrows(CaminhaoNotFoundException.class, () -> service.removerCaminhao("CAVALO", 404));
+    }
+
+    @Test
+    @DisplayName("Deve informar erros ao buscar caminhão de relatório incompleto")
+    void deveValidarRelatorioEVeiculosAoBuscarConjunto() {
+        assertThrows(RelatorioViagemNotFoundException.class, () -> service.buscarCaminhaoDoRelatorio(999));
+
+        RelatorioViagemEntity semCavalo = new RelatorioViagemEntity();
+        semCavalo.setId(96);
+        semCavalo.setCavaloId(1);
+        when(relatorioViagemRepository.findById(96)).thenReturn(Optional.of(semCavalo));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoDoRelatorio(96));
+
+        RelatorioViagemEntity semCarreta = new RelatorioViagemEntity();
+        semCarreta.setId(97);
+        semCarreta.setCavaloId(2);
+        semCarreta.setCarretaId(3);
+        when(relatorioViagemRepository.findById(97)).thenReturn(Optional.of(semCarreta));
+        when(veiculoCavaloRepository.findById(2)).thenReturn(Optional.of(cavalo(2, "AAA1A11")));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoDoRelatorio(97));
+
+        RelatorioViagemEntity statusNulo = new RelatorioViagemEntity();
+        statusNulo.setId(98);
+        statusNulo.setCavaloId(4);
+        statusNulo.setCarretaId(5);
+        when(relatorioViagemRepository.findById(98)).thenReturn(Optional.of(statusNulo));
+        when(veiculoCavaloRepository.findById(4)).thenReturn(Optional.of(cavalo(4, "BBB2B22")));
+        when(veiculoCarretaRepository.findById(5)).thenReturn(Optional.of(carreta(5, "CCC3C33")));
+        assertTrue(service.buscarCaminhaoDoRelatorio(98).emUso());
+    }
+
+    @Test
+    @DisplayName("Deve informar quando o motorista não possui relatório ativo")
+    void deveFalharBuscaDeCaminhaoAtivoSemRelatorio() {
+        when(relatorioViagemRepository.findFirstByMotoristaIdAndStatusInOrderByCriadoEmDesc(eq(77), any()))
+                .thenReturn(Optional.empty());
+
+        assertThrows(CaminhaoNotFoundException.class, () -> service.buscarCaminhaoAtivoDoMotorista(77));
+    }
+
+    @Test
+    @DisplayName("Deve vincular veículos já associados ao relatório e atualizar motorista")
+    void deveVincularVeiculosExistentesPorIdDoRelatorio() {
+        RelatorioViagemEntity relatorio = new RelatorioViagemEntity();
+        relatorio.setId(99);
+        relatorio.setCavaloId(10);
+        relatorio.setCarretaId(20);
+        relatorio.setStatus("em_andamento");
+        VeiculoCavaloEntity cavalo = cavalo(10, "AAA1A11");
+        VeiculoCarretaEntity carreta = carreta(20, "BBB2B22");
+        UsuarioEntity motorista = new UsuarioEntity();
+        motorista.setId(77);
+        motorista.setNome("Motorista atualizado");
+        when(relatorioViagemRepository.findById(99)).thenReturn(Optional.of(relatorio));
+        when(veiculoCavaloRepository.findById(10)).thenReturn(Optional.of(cavalo));
+        when(veiculoCarretaRepository.findById(20)).thenReturn(Optional.of(carreta));
+        when(usuarioRepository.findById(77)).thenReturn(Optional.of(motorista));
+
+        CaminhaoRelatorioResponse response = service.vincularCaminhaoAoRelatorio(99,
+                new VincularCaminhaoRelatorioRequest(null, null, 10, 20, 77));
+
+        assertEquals(77, relatorio.getMotoristaId());
+        assertEquals("Motorista atualizado", response.motoristaNome());
+        assertTrue(response.emUso());
+        verify(relatorioViagemRepository).save(relatorio);
+    }
+
+    @Test
+    @DisplayName("Deve informar falhas ao vincular IDs e placas inexistentes")
+    void deveValidarReferenciasAoVincularVeiculos() {
+        RelatorioViagemEntity relatorio = new RelatorioViagemEntity();
+        relatorio.setId(100);
+        relatorio.setCavaloId(10);
+        relatorio.setCarretaId(20);
+        when(relatorioViagemRepository.findById(100)).thenReturn(Optional.of(relatorio));
+
+        assertThrows(RelatorioViagemNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(404,
+                new VincularCaminhaoRelatorioRequest(null, null, null, null, null)));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest(null, null, 404, null, null)));
+        when(veiculoCavaloRepository.findByPlaca("CCC3C33")).thenReturn(Optional.empty());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest("CCC3C33", null, null, null, null)));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest(null, null, null, null, null)));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest("   ", "   ", null, null, null)));
+
+        when(veiculoCavaloRepository.findById(10)).thenReturn(Optional.of(cavalo(10, "AAA1A11")));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest(null, null, null, 404, null)));
+        when(veiculoCarretaRepository.findByPlaca("DDD4D44")).thenReturn(Optional.empty());
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest(null, "DDD4D44", null, null, null)));
+        assertThrows(CaminhaoNotFoundException.class, () -> service.vincularCaminhaoAoRelatorio(100,
+                new VincularCaminhaoRelatorioRequest(null, null, null, null, null)));
+    }
+
+    @Test
+    @DisplayName("Deve bloquear vinculação quando inspeção da carreta estiver vencida")
+    void deveBloquearVinculacaoComInspecaoDaCarretaVencida() {
+        RelatorioViagemEntity relatorio = new RelatorioViagemEntity();
+        relatorio.setId(101);
+        VeiculoCavaloEntity cavalo = cavalo(11, "AAA1A11");
+        VeiculoCarretaEntity carreta = carreta(21, "BBB2B22");
+        carreta.setDataVencimentoInspecao(LocalDate.now().minusDays(1));
+        when(relatorioViagemRepository.findById(101)).thenReturn(Optional.of(relatorio));
+        when(veiculoCavaloRepository.findByPlaca("AAA1A11")).thenReturn(Optional.of(cavalo));
+        when(veiculoCarretaRepository.findByPlaca("BBB2B22")).thenReturn(Optional.of(carreta));
+
+        assertThrows(InspecaoVencidaException.class, () -> service.vincularCaminhaoAoRelatorio(101,
+                new VincularCaminhaoRelatorioRequest("AAA1A11", "BBB2B22", null, null, null)));
+        verify(relatorioViagemRepository, never()).save(any());
+    }
+
+    private VeiculoCavaloEntity cavalo(Integer id, String placa) {
+        VeiculoCavaloEntity entity = new VeiculoCavaloEntity();
+        entity.setId(id);
+        entity.setPlaca(placa);
+        entity.setAtivo(true);
+        return entity;
+    }
+
+    private VeiculoCarretaEntity carreta(Integer id, String placa) {
+        VeiculoCarretaEntity entity = new VeiculoCarretaEntity();
+        entity.setId(id);
+        entity.setPlaca(placa);
+        entity.setAtivo(true);
+        return entity;
     }
 }

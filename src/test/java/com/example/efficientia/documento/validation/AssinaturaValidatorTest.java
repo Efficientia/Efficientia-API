@@ -74,16 +74,129 @@ class AssinaturaValidatorTest {
         )).isInstanceOf(DocumentoInvalidoException.class);
     }
 
+    @Test
+    void deveAceitarDocumentoSemAssinaturaSemCamposDeAssinante() {
+        DocumentoMetadataRequest documento = new DocumentoMetadataRequest(
+                1, TipoDocumento.RELATORIO_VIAGEM, OrigemDocumento.UPLOAD, null, null, null, "Relatório"
+        );
+
+        assertThatCode(() -> validator.validarArquivo(documento, "application/pdf"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void deveRejeitarCamposDeAssinanteEmDocumentoQueNaoSejaAssinatura() {
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.RELATORIO_VIAGEM, OrigemDocumento.UPLOAD, 2,
+                null, null, "Documento"
+        ), "application/pdf");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.RELATORIO_VIAGEM, OrigemDocumento.UPLOAD, null,
+                PapelAssinante.MOTORISTA, null, "Documento"
+        ), "application/pdf");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.RELATORIO_VIAGEM, OrigemDocumento.UPLOAD, null,
+                null, ModalidadeAssinatura.FOTO, "Documento"
+        ), "application/pdf");
+    }
+
+    @Test
+    void deveRejeitarAssinaturaArquivoSemCadaCampoObrigatorio() {
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.CAMERA, null,
+                PapelAssinante.MOTORISTA, ModalidadeAssinatura.FOTO, null
+        ), "image/png");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.CAMERA, 0,
+                PapelAssinante.MOTORISTA, ModalidadeAssinatura.FOTO, null
+        ), "image/png");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.CAMERA, 2,
+                null, ModalidadeAssinatura.FOTO, null
+        ), "image/png");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.CAMERA, 2,
+                PapelAssinante.MOTORISTA, null, null
+        ), "image/png");
+    }
+
+    @Test
+    void deveRejeitarDesenhoComOrigemIncompativelETextoComoArquivo() {
+        assertArquivoInvalido(requestArquivo(OrigemDocumento.CAMERA, ModalidadeAssinatura.DESENHO), "image/png");
+        assertArquivoInvalido(new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO, 2,
+                PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Assinatura textual"
+        ), "image/png");
+    }
+
+    @Test
+    void deveRejeitarAssinaturaTextualNulaOuSemIdentificadoresValidos() {
+        assertThatThrownBy(() -> validator.validarTexto(null))
+                .isInstanceOf(DocumentoInvalidoException.class);
+        assertTextoInvalido(requestTexto(null, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(0, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                null, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                0, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, null, ModalidadeAssinatura.TEXTO, "Ana"));
+    }
+
+    @Test
+    void deveRejeitarAssinaturaTextualComTipoOrigemOuModalidadeIncompativel() {
+        assertTextoInvalido(requestTexto(1, TipoDocumento.RELATORIO_VIAGEM, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.CAMERA,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.FOTO, "Ana"));
+        assertTextoInvalido(requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, null));
+    }
+
+    @Test
+    void deveRejeitarTextoVazioECaracteresHtmlComAberturaOuFechamento() {
+        assertTextoInvalido(requestTexto("   "));
+        assertThatThrownBy(() -> validator.validarTexto(requestTexto("Assinatura>")))
+                .isInstanceOf(DocumentoInvalidoException.class);
+    }
+
+    @Test
+    void deveContarPontosDeCodigoParaLimiteDeCaracteres() {
+        String limite = "😀".repeat(150);
+        assertThat(validator.validarTexto(requestTexto(limite))).isEqualTo(limite);
+        assertTextoInvalido(requestTexto("😀".repeat(151)));
+    }
+
+    private void assertArquivoInvalido(DocumentoMetadataRequest request, String mimeType) {
+        assertThatThrownBy(() -> validator.validarArquivo(request, mimeType))
+                .isInstanceOf(DocumentoInvalidoException.class);
+    }
+
+    private void assertTextoInvalido(AssinaturaTextoRequest request) {
+        assertThatThrownBy(() -> validator.validarTexto(request))
+                .isInstanceOf(DocumentoInvalidoException.class);
+    }
+
     private AssinaturaTextoRequest requestTexto(String texto) {
+        return requestTexto(1, TipoDocumento.ASSINATURA, OrigemDocumento.TEXTO,
+                2, PapelAssinante.MOTORISTA, ModalidadeAssinatura.TEXTO, texto);
+    }
+
+    private AssinaturaTextoRequest requestTexto(
+            Integer viagemId,
+            TipoDocumento tipoDocumento,
+            OrigemDocumento origem,
+            Integer assinanteId,
+            PapelAssinante papelAssinante,
+            ModalidadeAssinatura modalidade,
+            String texto
+    ) {
         return new AssinaturaTextoRequest(
-                1,
-                TipoDocumento.ASSINATURA,
-                OrigemDocumento.TEXTO,
-                2,
-                PapelAssinante.MOTORISTA,
-                ModalidadeAssinatura.TEXTO,
-                texto,
-                "Assinatura acessível"
+                viagemId, tipoDocumento, origem, assinanteId, papelAssinante, modalidade, texto, "Assinatura acessível"
         );
     }
 

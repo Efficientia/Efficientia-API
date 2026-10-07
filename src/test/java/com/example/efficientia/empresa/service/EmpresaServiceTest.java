@@ -2,17 +2,34 @@ package com.example.efficientia.empresa.service;
 
 import com.example.efficientia.cadastrobase.api.CadastroDuplicadoException;
 import com.example.efficientia.cadastrobase.api.CadastroInvalidoException;
+import com.example.efficientia.cadastrobase.persistence.EnderecoEntity;
+import com.example.efficientia.cadastrobase.persistence.EnderecoRepository;
 import com.example.efficientia.empresa.api.EmpresaContracts.AtualizarDadosEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.CriarEmpresaRequest;
 import com.example.efficientia.empresa.api.EmpresaContracts.EmpresaResponse;
 import com.example.efficientia.empresa.api.EmpresaContracts.EnderecoDto;
 import com.example.efficientia.empresa.api.EmpresaContracts.UploadLogoResponse;
 import com.example.efficientia.empresa.persistence.InMemoryEmpresaRepository;
+import com.example.efficientia.empresa.persistence.InMemoryEmpresaAdminRepository;
+import com.example.efficientia.documento.storage.StorageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -417,5 +434,246 @@ class EmpresaServiceTest {
 
         AtualizarDadosEmpresaRequest duplicarEmail = new AtualizarDadosEmpresaRequest(null, null, null, cadA.emailCorporativo(), null, null, null, null, null, null, null, null);
         assertThrows(CadastroDuplicadoException.class, () -> service.atualizarDadosComplementares(cadB.id(), duplicarEmail));
+    }
+
+    @Test
+    @DisplayName("Deve repetir a geração do código quando houver colisão e persistir o próximo disponível")
+    void deveTentarNovoCodigoQuandoHouverColisao() {
+        AtomicInteger verificacoesDeCodigo = new AtomicInteger();
+        InMemoryEmpresaRepository repositoryComColisoes = new InMemoryEmpresaRepository() {
+            @Override
+            public boolean existePorCodigo(String codigo) {
+                return verificacoesDeCodigo.incrementAndGet() <= 2;
+            }
+        };
+        AtomicInteger codigosGerados = new AtomicInteger();
+        CodigoEmpresaGenerator generatorDeterministico = new CodigoEmpresaGenerator() {
+            @Override
+            public String gerarCodigo(String nomeEmpresa) {
+                return "EMP0000" + codigosGerados.incrementAndGet();
+            }
+        };
+        EmpresaService serviceComColisoes = new EmpresaService(repositoryComColisoes, generatorDeterministico);
+
+        EmpresaResponse response = serviceComColisoes.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa Colisao", "12345678000191", "colisao@empresa.com", "senha123"));
+
+        assertEquals("EMP00003", response.codigoEmpresa());
+        assertEquals(3, codigosGerados.get());
+        assertEquals(3, verificacoesDeCodigo.get());
+    }
+
+    @Test
+    @DisplayName("Deve persistir e normalizar endereço usando o repositório relacional")
+    void devePersistirEnderecoNoRepositorioRelacional() {
+        EnderecoRepository enderecoRepository = mock(EnderecoRepository.class);
+        EnderecoEntity enderecoPersistido = mock(EnderecoEntity.class);
+        when(enderecoPersistido.getId()).thenReturn(4321);
+        when(enderecoPersistido.getCep()).thenReturn("12345678");
+        when(enderecoPersistido.getLogradouro()).thenReturn("Rua das Flores");
+        when(enderecoPersistido.getNumero()).thenReturn("S/N");
+        when(enderecoPersistido.getCidade()).thenReturn("Campo Grande");
+        when(enderecoPersistido.getEstado()).thenReturn("GO");
+        when(enderecoRepository.findById(77)).thenReturn(Optional.empty());
+        when(enderecoRepository.save(any(EnderecoEntity.class))).thenReturn(enderecoPersistido);
+        EmpresaService serviceComEndereco = new EmpresaService(
+                repository,
+                new InMemoryEmpresaAdminRepository(),
+                codigoGenerator,
+                null,
+                enderecoRepository,
+                null
+        );
+
+        EmpresaResponse response = serviceComEndereco.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa com endereco", "Empresa Fantasia", "Razao Social Ltda", "12345678000192",
+                "endereco@empresa.com", null, "senha123", 77, null, null, null, null, null, null,
+                new EnderecoDto(null, "12.345-678", " Rua das Flores ", null, " Campo Grande ", "goias")
+        ));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(EnderecoEntity.class);
+        verify(enderecoRepository).save(captor.capture());
+        assertEquals("12345678", captor.getValue().getCep());
+        assertEquals("Rua das Flores", captor.getValue().getLogradouro());
+        assertEquals("S/N", captor.getValue().getNumero());
+        assertEquals("Campo Grande", captor.getValue().getCidade());
+        assertEquals("GO", captor.getValue().getEstado());
+        assertEquals(4321, response.enderecoId());
+        assertEquals("GO", response.uf());
+    }
+
+    @Test
+    @DisplayName("Deve reutilizar o endereço relacional existente durante o cadastro")
+    void deveAtualizarEnderecoRelacionalExistente() {
+        EnderecoRepository enderecoRepository = mock(EnderecoRepository.class);
+        EnderecoEntity enderecoExistente = mock(EnderecoEntity.class);
+        when(enderecoExistente.getId()).thenReturn(79);
+        when(enderecoExistente.getCep()).thenReturn("01001000");
+        when(enderecoExistente.getLogradouro()).thenReturn("Rua Nova");
+        when(enderecoExistente.getNumero()).thenReturn("15");
+        when(enderecoExistente.getCidade()).thenReturn("São Paulo");
+        when(enderecoExistente.getEstado()).thenReturn("SP");
+        when(enderecoRepository.findById(79)).thenReturn(Optional.of(enderecoExistente));
+        when(enderecoRepository.save(enderecoExistente)).thenReturn(enderecoExistente);
+        EmpresaService serviceComEndereco = new EmpresaService(
+                repository,
+                new InMemoryEmpresaAdminRepository(),
+                codigoGenerator,
+                null,
+                enderecoRepository,
+                null
+        );
+
+        EmpresaResponse response = serviceComEndereco.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa endereco relacional", "Empresa Relacional", "Empresa Relacional Ltda",
+                "12345678000199", "endereco-relacional@empresa.com", null, "senha123", 79,
+                "01.001-000", " Rua Nova ", " 15 ", " São Paulo ", "sp", null, null));
+
+        verify(enderecoExistente).setCep("01001000");
+        verify(enderecoExistente).setLogradouro("Rua Nova");
+        verify(enderecoExistente).setNumero("15");
+        verify(enderecoExistente).setCidade("São Paulo");
+        verify(enderecoExistente).setEstado("SP");
+        verify(enderecoRepository).save(enderecoExistente);
+        assertEquals(79, response.enderecoId());
+        assertEquals("01001000", response.cep());
+    }
+
+    @Test
+    @DisplayName("Deve carregar endereço existente pelo repositório quando não estiver no cache")
+    void deveBuscarEnderecoNoRepositorioRelacional() {
+        EnderecoRepository enderecoRepository = mock(EnderecoRepository.class);
+        EnderecoEntity enderecoExistente = mock(EnderecoEntity.class);
+        when(enderecoExistente.getId()).thenReturn(88);
+        when(enderecoExistente.getCep()).thenReturn("79000000");
+        when(enderecoExistente.getLogradouro()).thenReturn("Rua A");
+        when(enderecoExistente.getNumero()).thenReturn("10");
+        when(enderecoExistente.getCidade()).thenReturn("Campo Grande");
+        when(enderecoExistente.getEstado()).thenReturn("MS");
+        when(enderecoRepository.findById(88)).thenReturn(Optional.of(enderecoExistente));
+        EmpresaService serviceComEndereco = new EmpresaService(
+                repository,
+                new InMemoryEmpresaAdminRepository(),
+                codigoGenerator,
+                null,
+                enderecoRepository,
+                null
+        );
+
+        EmpresaResponse response = serviceComEndereco.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa endereco existente", "Empresa endereco existente", "12345678000193",
+                "endereco-existente@empresa.com", "senha123", 88));
+
+        assertEquals(88, response.enderecoId());
+        assertEquals("79000000", response.cep());
+        assertEquals("Rua A", response.logradouro());
+        assertEquals("MS", response.estado());
+        verify(enderecoRepository).findById(88);
+    }
+
+    @Test
+    @DisplayName("Deve preservar dados quando atualização é nula ou contém valores em branco")
+    void devePreservarDadosEmAtualizacaoNulaOuEmBranco() {
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa Original", "12345678000194", "original@empresa.com", "senha123"));
+
+        EmpresaResponse semAlteracao = service.atualizarDadosComplementares(cadastrada.id(), null);
+        assertEquals("Empresa Original", semAlteracao.nomeEmpresa());
+        assertEquals(1, semAlteracao.etapaCadastro());
+
+        AtualizarDadosEmpresaRequest dadosEmBranco = new AtualizarDadosEmpresaRequest(
+                " ", " ", cadastrada.cnpj(), cadastrada.emailCorporativo(), " ", " ", " ", " ", " ", " ", " ", null);
+        EmpresaResponse atualizada = service.atualizarDadosComplementares(cadastrada.id(), dadosEmBranco);
+
+        assertEquals("Empresa Original", atualizada.nomeFantasia());
+        assertEquals(cadastrada.cnpj(), atualizada.cnpj());
+        assertEquals(cadastrada.emailCorporativo(), atualizada.emailCorporativo());
+        assertEquals(2, atualizada.etapaCadastro());
+    }
+
+    @Test
+    @DisplayName("Deve validar CNPJ inválido e código ausente durante atualização")
+    void deveValidarCnpjECodigoNaAtualizacao() {
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa Validacao", "12345678000195", "validacao@empresa.com", "senha123"));
+        AtualizarDadosEmpresaRequest cnpjInvalido = new AtualizarDadosEmpresaRequest(
+                null, null, "123", null, null, null, null, null, null, null, null, null);
+
+        assertThrows(CadastroInvalidoException.class,
+                () -> service.atualizarDadosComplementares(cadastrada.id(), cnpjInvalido));
+        assertThrows(CadastroInvalidoException.class,
+                () -> service.atualizarDadosComplementaresPorCodigo(" ", cnpjInvalido));
+        assertThrows(ResponseStatusException.class,
+                () -> service.atualizarDadosComplementaresPorCodigo("NAOEXISTE", cnpjInvalido));
+        assertThrows(ResponseStatusException.class,
+                () -> service.atualizarDadosComplementares(999L, cnpjInvalido));
+    }
+
+    @Test
+    @DisplayName("Deve completar endereço parcial em memória durante a atualização")
+    void deveAtualizarEnderecoParcialEmMemoria() {
+        EmpresaResponse inicial = service.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa endereco memoria", "Empresa endereco memoria", "12345678000196",
+                "endereco-memoria@empresa.com", "senha123", 123));
+        AtualizarDadosEmpresaRequest update = new AtualizarDadosEmpresaRequest(
+                null, null, null, null, null, "79.001-000", " Avenida Central ", null,
+                " Campo Grande ", "ms", null, null);
+
+        EmpresaResponse atualizada = service.atualizarDadosComplementares(inicial.id(), update);
+
+        assertEquals(123, atualizada.enderecoId());
+        assertEquals("79001000", atualizada.cep());
+        assertEquals("Avenida Central", atualizada.logradouro());
+        assertEquals("S/N", atualizada.numero());
+        assertEquals("Campo Grande", atualizada.cidade());
+        assertEquals("MS", atualizada.uf());
+    }
+
+    @Test
+    @DisplayName("Deve aceitar SVG pelo nome do arquivo e persistir também no serviço de storage")
+    void deveAceitarSvgPorExtensaoEPersistirNoStorage() {
+        CriarEmpresaRequest inicial = new CriarEmpresaRequest(
+                "Empresa SVG", "12345678000197", "svg@empresa.com", "senha123");
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(inicial);
+        StorageService storageService = mock(StorageService.class);
+        EmpresaService serviceComStorage = new EmpresaService(
+                repository,
+                new InMemoryEmpresaAdminRepository(),
+                codigoGenerator,
+                null,
+                null,
+                storageService
+        );
+        MockMultipartFile arquivo = new MockMultipartFile(
+                "arquivo", "LOGO.SVG", null, "<svg/>".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        UploadLogoResponse response = serviceComStorage.atualizarLogo(cadastrada.id(), arquivo);
+
+        assertEquals("image/svg+xml", response.mimeType());
+        verify(storageService).salvar(any(UUID.class), eq("logo.svg"), eq("image/svg+xml"), any(InputStream.class));
+    }
+
+    @Test
+    @DisplayName("Deve rejeitar arquivo de logo vazio, empresa ausente e leitura com falha")
+    void deveTratarFalhasNoUploadOuConsultaDaLogo() throws IOException {
+        EmpresaResponse cadastrada = service.cadastrarEmpresa(new CriarEmpresaRequest(
+                "Empresa logo erros", "12345678000198", "logo-erros@empresa.com", "senha123"));
+
+        assertEquals("image/png", service.obterMimeTypeLogo(cadastrada.id()));
+        assertThrows(ResponseStatusException.class, () -> service.obterConteudoLogo(cadastrada.id()));
+        assertThrows(ResponseStatusException.class, () -> service.obterConteudoLogo(999L));
+        assertThrows(ResponseStatusException.class, () -> service.atualizarLogo(999L, null));
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarLogo(cadastrada.id(), null));
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarLogo(
+                cadastrada.id(), new MockMultipartFile("arquivo", "logo.png", "image/png", new byte[0])));
+
+        MultipartFile arquivoComFalha = mock(MultipartFile.class);
+        when(arquivoComFalha.isEmpty()).thenReturn(false);
+        when(arquivoComFalha.getSize()).thenReturn(1L);
+        when(arquivoComFalha.getContentType()).thenReturn("image/png");
+        when(arquivoComFalha.getOriginalFilename()).thenReturn("logo.png");
+        when(arquivoComFalha.getBytes()).thenThrow(new IOException("falha simulada de leitura"));
+
+        assertThrows(CadastroInvalidoException.class, () -> service.atualizarLogo(cadastrada.id(), arquivoComFalha));
     }
 }
