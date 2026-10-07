@@ -4,7 +4,7 @@
 **Disciplina Acadêmica:** Desenvolvimento de Sistemas 2 (DS2) — 2º Ano Técnico  
 **Épico / História Guarda-Chuva:** `EFFICIENTI-94` — **DS2: Desenvolvimento da API REST Principal (Java / Spring Boot)**  
 **Repositório Base:** `efficientia-API/efficientia`  
-**Tecnologias:** Java 26, Spring Boot 4.1.0, Spring Data JPA, Spring Security (JWT HS256), PostgreSQL, Flyway, Docker, Swagger / OpenAPI 3.0, Micrometer/Prometheus.
+**Tecnologias:** Java 17, Spring Boot 4.1.0, Spring Data JPA, Spring Security (JWT HS256), PostgreSQL, Flyway, Docker, Swagger / OpenAPI 3.0, Micrometer/Prometheus.
 
 ---
 
@@ -49,10 +49,10 @@ A estrutura de **DS2** no Jira reflete rigorosamente o padrão adotado para **DA
 - **Subtarefas (Subtasks):**
   - `EFFICIENTI-218.1`: Inicialização do Spring Boot com dependências Web, Actuator e Testes.
   - `EFFICIENTI-218.2`: Criação do endpoint `GET /api/v1/status` e `/actuator/health`.
-  - `EFFICIENTI-218.3`: Configuração da GitHub Actions (`.github/workflows/ci.yml`).
+  - `EFFICIENTI-218.3`: Configuração da GitHub Actions (`maven-verify.yml`, `ci.yml` e `container-build.yml`).
 - **Critérios de Aceite:**
   - `GET /api/v1/status` retorna HTTP 200 com JSON contendo nome, versão e status "UP".
-  - Pipeline de CI executa `mvn verify` em ambiente Ubuntu e Java 26 com sucesso.
+  - Pipeline de CI executa `./mvnw clean verify` em ambiente Ubuntu e Java 17, incluindo os limites de cobertura do JaCoCo.
 
 ---
 

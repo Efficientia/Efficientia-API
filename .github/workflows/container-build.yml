@@ -1,0 +1,25 @@
+name: Container Image Build
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-image:
+    name: Build Efficientia API image
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build image without rerunning the Maven test suite
+        run: docker build --tag efficientia-api:${GITHUB_SHA} .

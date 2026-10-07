@@ -7,7 +7,7 @@ COPY .mvn .mvn
 COPY src ./src
 
 RUN chmod +x mvnw
-RUN ./mvnw --batch-mode --no-transfer-progress clean package
+RUN ./mvnw --batch-mode --no-transfer-progress clean package -DskipTests
 
 FROM cgr.dev/chainguard/jre:openjdk-17
 WORKDIR /app

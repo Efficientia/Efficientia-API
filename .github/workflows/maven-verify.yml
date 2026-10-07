@@ -2,33 +2,40 @@ name: Maven Verify
 
 on:
   pull_request:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: maven-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
           cache: maven
 
-      - name: Verify Maven wrapper
-        run: chmod +x mvnw
+      - name: Verify Docker for Testcontainers
+        run: docker info
 
-      - name: Build and test
-        run: ./mvnw --batch-mode --no-transfer-progress verify
+      - name: Build, test, and enforce JaCoCo thresholds
+        run: ./mvnw --batch-mode --no-transfer-progress clean verify
 
       - name: Upload JaCoCo Report
-        uses: actions/upload-artifact@v4
-        if: always() # Upload report even if tests/coverage fail
+        uses: actions/upload-artifact@v7
+        if: ${{ always() && hashFiles('target/site/jacoco/index.html') != '' }}
         with:
           name: jacoco-report
           path: target/site/jacoco/
