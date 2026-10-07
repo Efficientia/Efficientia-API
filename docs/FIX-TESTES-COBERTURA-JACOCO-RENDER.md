@@ -31,8 +31,9 @@ Este documento registra a resolução dos impedimentos de *deploy* na infraestru
 - **Problema:** `assinatura_motorista.sha256` é `CHAR(64)` no PostgreSQL, enquanto a entidade esperava `VARCHAR(64)`. A validação seguinte também encontraria incompatibilidade entre os enums PostgreSQL das ocorrências e os campos `String` das entidades.
 - **Correção:** O campo SHA-256 agora usa o mapeamento Hibernate `CHAR`. A migration V10 converte os três campos de motivo/anomalia para `VARCHAR(50)` e mantém os códigos aceitos por constraints `CHECK`, sem editar migrations já aplicadas.
 - **Flyway:** Removido o `repair()` automático em toda inicialização; divergências de checksum agora são rejeitadas pela validação normal do Flyway. O baseline configurado como versão 1 faz bancos não vazios sem histórico ignorarem a V1, de acordo com o comentário da própria migration.
-- **Build de imagem:** O Dockerfile usa Java 17 no builder e runtime para corresponder ao `pom.xml` e ao CI, executa os testes disponíveis durante `package` e usa `.dockerignore` para excluir credenciais e artefatos locais do contexto.
-- **Validação automatizada:** `PostgresIntegrationTest` ativa explicitamente `ddl-auto=validate`, de modo que a inicialização contra PostgreSQL verifique os tipos do schema. Essa validação depende do Testcontainers e do daemon Docker no ambiente de execução.
+- **Build de imagem:** O Dockerfile usa Java 17 no builder e runtime para corresponder ao `pom.xml`. A etapa de empacotamento usa `-DskipTests`, pois os testes são executados pelo workflow Maven; o `.dockerignore` exclui credenciais e artefatos locais do contexto.
+- **CI:** Os três workflows foram separados por responsabilidade: `maven-verify.yml` executa `clean verify` e os limites JaCoCo; `ci.yml` executa a integração com PostgreSQL/Testcontainers e falha se o teste for ignorado; `container-build.yml` valida a construção da imagem.
+- **Validação automatizada:** `PostgresIntegrationTest` ativa explicitamente `ddl-auto=validate`, de modo que a inicialização contra PostgreSQL verifique os tipos do schema. Os workflows com Testcontainers verificam o daemon Docker antes de iniciar e a migração V11 é exercitada com os nomes finais dos schemas.
 
 ### 4. Bateria de Testes: Adequação das Restrições do JaCoCo (80%/60%)
 - **Problema:** O código estava engessado no CI/CD com métricas de 73% de linhas (mínimo 80%) e 53% de ramificações (mínimo 60%). Era preciso blindar componentes essenciais.
@@ -51,6 +52,6 @@ Este documento registra a resolução dos impedimentos de *deploy* na infraestru
 ---
 
 ## Status da Validação
-- **Testes Unitários e de Integração:** 220 testes executados e aprovados (BUILD SUCCESS).
-- **Métricas Finais (JaCoCo):** Todas as violações resolvidas. Cobertura superou 80% em Linhas e 60% em Ramificações (`[INFO] All coverage checks have been met`).
+- **Testes Unitários e de Integração:** A validação local executou 499 testes, com zero falhas e erros; o teste PostgreSQL foi ignorado porque Docker não está disponível localmente. O CI dedicado exige que esse teste rode e falha se ele for ignorado.
+- **Métricas Finais (JaCoCo):** A validação local alcançou 93,1% de linhas e 80,9% de ramificações, acima dos limites de 80% e 60% (`[INFO] All coverage checks have been met`).
 - **Estado de Commit Local:** Salvo com sucesso na ramificação local (`fix/health-check-test-update`). Preparado para a esteira de Pull Request (devido a regra `GH013`).
