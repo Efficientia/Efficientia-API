@@ -54,12 +54,12 @@ class PostgresIntegrationTest {
     void deveExecutarMigracoesEVersaoNoPostgresReal() {
         assertThat(postgres.isRunning()).isTrue();
 
-        jdbcTemplate.execute("INSERT INTO public.usuario (id, tipo, cpf, nome, senha_hash) VALUES (10, 'motorista', '12345678901', 'Motorista Teste', 'hash') ON CONFLICT DO NOTHING");
-        jdbcTemplate.execute("INSERT INTO public.veiculo_cavalo (id, placa) VALUES (10, 'ABC1234') ON CONFLICT DO NOTHING");
-        jdbcTemplate.execute("INSERT INTO public.veiculo_carreta (id, placa, capacidade_cabecas) VALUES (10, 'DEF5678', 50) ON CONFLICT DO NOTHING");
-        jdbcTemplate.execute("INSERT INTO public.endereco (id, cep, logradouro, numero, cidade, estado) VALUES (10, '01000000', 'Logradouro Teste', '100', 'Cidade', 'SP') ON CONFLICT DO NOTHING");
-        jdbcTemplate.execute("INSERT INTO public.fazenda (id, pecuarista_id, endereco_id, nome) VALUES (10, 10, 10, 'Fazenda Teste') ON CONFLICT DO NOTHING");
-        jdbcTemplate.execute("INSERT INTO public.relatorio_viagem (id, fazenda_id, motorista_id, manobrista_id, curraleiro_id, cavalo_id, carreta_id, numero_gta, numero_nota_fiscal, data_embarque, horario_embarque, horario_saida_propriedade, km_saida_embarcadouro, data_chegada_unidade, horario_chegada_unidade, horario_desembarque, km_chegada_desembarcadouro, numero_curral, sirene_re_funcionou, url_assinatura_pecuarista, url_assinatura_motorista, url_assinatura_manobrista, url_assinatura_curraleiro) VALUES (100, 10, 10, 10, 10, 10, 10, 'GTA12345', 'NF12345', '2026-09-03', '08:00:00', '09:00:00', 100, '2026-09-03', '12:00:00', '13:00:00', 200, 'C1', true, 'url1', 'url2', 'url3', 'url4') ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash) VALUES (10, 'motorista', '12345678901', 'Motorista Teste', 'hash') ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_frota.tb_veiculo_cavalo (id, placa) VALUES (10, 'ABC1234') ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_frota.tb_veiculo_carreta (id, placa, capacidade_cabecas) VALUES (10, 'DEF5678', 50) ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_corporativo.tb_endereco (id, cep, logradouro, numero, cidade, estado) VALUES (10, '01000000', 'Logradouro Teste', '100', 'Cidade', 'SP') ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_corporativo.tb_fazenda (id, pecuarista_id, endereco_id, nome) VALUES (10, 10, 10, 'Fazenda Teste') ON CONFLICT DO NOTHING");
+        jdbcTemplate.execute("INSERT INTO sc_operacao.tb_relatorio_viagem (id, fazenda_id, motorista_id, manobrista_id, curraleiro_id, cavalo_id, carreta_id, numero_gta, numero_nota_fiscal, data_embarque, horario_embarque, horario_saida_propriedade, km_saida_embarcadouro, data_chegada_unidade, horario_chegada_unidade, horario_desembarque, km_chegada_desembarcadouro, numero_curral, sirene_re_funcionou, url_assinatura_pecuarista, url_assinatura_motorista, url_assinatura_manobrista, url_assinatura_curraleiro) VALUES (100, 10, 10, 10, 10, 10, 10, 'GTA12345', 'NF12345', '2026-09-03', '08:00:00', '09:00:00', 100, '2026-09-03', '12:00:00', '13:00:00', 200, 'C1', true, 'url1', 'url2', 'url3', 'url4') ON CONFLICT DO NOTHING");
 
         com.example.efficientia.documento.persistence.DocumentoEntity doc = new com.example.efficientia.documento.persistence.DocumentoEntity();
         doc.setId(UUID.randomUUID());
