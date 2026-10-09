@@ -464,7 +464,9 @@ public class DocumentoService {
                 && documento.getPapelAssinante() != null) {
             relatorioViagemRepository.findById(documento.getViagemId()).ifPresent(relatorio -> {
                 String url = "/api/v1/documentos/" + documento.getId() + "/conteudo";
-                if (documento.getPapelAssinante() == PapelAssinante.MOTORISTA) {
+                if (documento.getPapelAssinante() == PapelAssinante.PECUARISTA) {
+                    relatorio.setUrlAssinaturaPecuarista(url);
+                } else if (documento.getPapelAssinante() == PapelAssinante.MOTORISTA) {
                     relatorio.setUrlAssinaturaMotorista(url);
                 } else if (documento.getPapelAssinante() == PapelAssinante.MANOBRISTA) {
                     relatorio.setUrlAssinaturaManobrista(url);

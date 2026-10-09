@@ -1,8 +1,20 @@
 package com.example.efficientia.relatorioviagem.service;
 
+import com.example.efficientia.assinaturamotorista.api.AssinaturaFormatoInvalidoException;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaNaoEncontradaException;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaMotoristaContracts.AssinaturaMetadadosRequest;
 import com.example.efficientia.assinaturamotorista.persistence.AssinaturaMotoristaRepository;
+import com.example.efficientia.assinaturamotorista.validation.PngSignatureValidator;
 import com.example.efficientia.cadastrobase.persistence.UsuarioEntity;
 import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
+import com.example.efficientia.documento.api.DocumentoMetadataRequest;
+import com.example.efficientia.documento.api.DocumentoResponse;
+import com.example.efficientia.documento.domain.ModalidadeAssinatura;
+import com.example.efficientia.documento.domain.OrigemDocumento;
+import com.example.efficientia.documento.domain.PapelAssinante;
+import com.example.efficientia.documento.domain.TipoDocumento;
+import com.example.efficientia.documento.service.DocumentoConteudo;
+import com.example.efficientia.documento.service.DocumentoService;
 import com.example.efficientia.relatorioviagem.api.AnomaliaItemDto;
 import com.example.efficientia.relatorioviagem.api.AssinaturasIncompletasException;
 import com.example.efficientia.relatorioviagem.api.CriarRelatorioViagemRequest;
@@ -22,17 +34,20 @@ import com.example.efficientia.relatorioviagem.persistence.ParadaImprevistaRepos
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemEntity;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,6 +61,7 @@ public class RelatorioViagemService {
     private ParadaImprevistaRepository paradaImprevistaRepository;
     private AnomaliaEmbarqueRepository anomaliaEmbarqueRepository;
     private AnomaliaDesembarqueRepository anomaliaDesembarqueRepository;
+    private DocumentoService documentoService;
 
     public RelatorioViagemService(RelatorioViagemRepository repository) {
         this.repository = repository;
@@ -61,6 +77,17 @@ public class RelatorioViagemService {
         this.assinaturaRepository = assinaturaRepository;
     }
 
+    public RelatorioViagemService(
+            RelatorioViagemRepository repository,
+            UsuarioRepository usuarioRepository,
+            AssinaturaMotoristaRepository assinaturaRepository,
+            ParadaImprevistaRepository paradaImprevistaRepository,
+            AnomaliaEmbarqueRepository anomaliaEmbarqueRepository,
+            AnomaliaDesembarqueRepository anomaliaDesembarqueRepository
+    ) {
+        this(repository, usuarioRepository, assinaturaRepository, paradaImprevistaRepository, anomaliaEmbarqueRepository, anomaliaDesembarqueRepository, null);
+    }
+
     @Autowired
     public RelatorioViagemService(
             RelatorioViagemRepository repository,
@@ -68,7 +95,8 @@ public class RelatorioViagemService {
             @Autowired(required = false) AssinaturaMotoristaRepository assinaturaRepository,
             @Autowired(required = false) ParadaImprevistaRepository paradaImprevistaRepository,
             @Autowired(required = false) AnomaliaEmbarqueRepository anomaliaEmbarqueRepository,
-            @Autowired(required = false) AnomaliaDesembarqueRepository anomaliaDesembarqueRepository
+            @Autowired(required = false) AnomaliaDesembarqueRepository anomaliaDesembarqueRepository,
+            @Autowired(required = false) DocumentoService documentoService
     ) {
         this.repository = repository;
         this.usuarioRepository = usuarioRepository;
@@ -76,6 +104,7 @@ public class RelatorioViagemService {
         this.paradaImprevistaRepository = paradaImprevistaRepository;
         this.anomaliaEmbarqueRepository = anomaliaEmbarqueRepository;
         this.anomaliaDesembarqueRepository = anomaliaDesembarqueRepository;
+        this.documentoService = documentoService;
     }
 
     @Transactional
@@ -310,6 +339,148 @@ public class RelatorioViagemService {
 
         entity.setAtualizadoEm(LocalDateTime.now());
         return montarResponseCompleta(repository.save(entity));
+    }
+
+    @Transactional
+    public RelatorioViagemResponse salvarAssinaturaParticipanteMultipart(
+            Integer id,
+            String papel,
+            UUID idempotencyKey,
+            MultipartFile arquivo,
+            AssinaturaMetadadosRequest metadados,
+            Authentication authentication
+    ) {
+        if (id == null) {
+            throw new IllegalArgumentException("O identificador do relatório é obrigatório.");
+        }
+        if (papel == null || papel.isBlank()) {
+            throw new ValidacaoDiarioRotaException("Papel de assinante é obrigatório.",
+                    Map.of("papel", "Informe pecuarista, motorista, manobrista ou curraleiro."));
+        }
+        String papelNorm = papel.trim().toUpperCase(Locale.ROOT);
+        if (!List.of("PECUARISTA", "MOTORISTA", "MANOBRISTA", "CURRALEIRO").contains(papelNorm)) {
+            throw new ValidacaoDiarioRotaException("Papel de assinante inválido.",
+                    Map.of("papel", "Papel deve ser pecuarista, motorista, manobrista ou curraleiro."));
+        }
+
+        RelatorioViagemEntity entity = repository.findById(id)
+                .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+
+        if ("aprovado".equalsIgnoreCase(entity.getStatus()) || "concluido".equalsIgnoreCase(entity.getStatus())) {
+            throw new ValidacaoDiarioRotaException("Relatório já finalizado.",
+                    Map.of("status", "Não é permitido alterar assinaturas de um relatório já finalizado."));
+        }
+
+        Integer usuarioLogadoId = extrairUsuarioId(authentication);
+        if (usuarioLogadoId != null && entity.getMotoristaId() != null
+                && !usuarioLogadoId.equals(entity.getMotoristaId()) && isPerfilMotorista(authentication)) {
+            throw new org.springframework.security.access.AccessDeniedException("Você não tem permissão para alterar assinaturas de um relatório de outro motorista.");
+        }
+
+        if (arquivo == null || arquivo.isEmpty()) {
+            throw new AssinaturaFormatoInvalidoException("O arquivo de assinatura PNG é obrigatório e não pode estar vazio.");
+        }
+
+        byte[] bytes;
+        try {
+            bytes = arquivo.getBytes();
+        } catch (java.io.IOException e) {
+            throw new AssinaturaFormatoInvalidoException("Falha ao ler os bytes do arquivo de assinatura.");
+        }
+
+        PngSignatureValidator.ValidatedPng validated = PngSignatureValidator.validate(bytes);
+
+        String urlConteudo;
+        if (documentoService != null) {
+            UUID docKey = idempotencyKey != null ? idempotencyKey : UUID.randomUUID();
+            PapelAssinante papelAssinante = PapelAssinante.valueOf(papelNorm);
+            ModalidadeAssinatura modalidade = (metadados != null && metadados.modalidade() != null
+                    && metadados.modalidade().name().equals("NOME_DIGITADO"))
+                    ? ModalidadeAssinatura.TEXTO
+                    : ModalidadeAssinatura.DESENHO;
+            DocumentoMetadataRequest docRequest = new DocumentoMetadataRequest(
+                    id,
+                    TipoDocumento.ASSINATURA,
+                    OrigemDocumento.DESENHO,
+                    usuarioLogadoId != null ? usuarioLogadoId : entity.getMotoristaId(),
+                    papelAssinante,
+                    modalidade,
+                    "Assinatura de " + papelNorm.toLowerCase() + " do relatório de viagem " + id
+            );
+            DocumentoResponse docResponse = documentoService.criarComArquivo(docRequest, arquivo, docKey);
+            urlConteudo = "/api/v1/documentos/" + docResponse.id() + "/conteudo";
+        } else {
+            urlConteudo = "/api/v1/relatorios-viagem/" + id + "/assinaturas/" + papel.toLowerCase() + "/conteudo";
+        }
+
+        switch (papelNorm) {
+            case "PECUARISTA" -> entity.setUrlAssinaturaPecuarista(urlConteudo);
+            case "MOTORISTA" -> entity.setUrlAssinaturaMotorista(urlConteudo);
+            case "MANOBRISTA" -> entity.setUrlAssinaturaManobrista(urlConteudo);
+            case "CURRALEIRO" -> entity.setUrlAssinaturaCurraleiro(urlConteudo);
+        }
+
+        entity.setAtualizadoEm(LocalDateTime.now());
+        RelatorioViagemEntity salvo = repository.save(entity);
+        return montarResponseCompleta(salvo);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentoConteudo buscarConteudoAssinaturaParticipante(Integer id, String papel) {
+        if (id == null) {
+            throw new IllegalArgumentException("O identificador do relatório é obrigatório.");
+        }
+        if (papel == null || papel.isBlank()) {
+            throw new IllegalArgumentException("O papel do assinante é obrigatório.");
+        }
+        String papelNorm = papel.trim().toUpperCase(Locale.ROOT);
+        RelatorioViagemEntity entity = repository.findById(id)
+                .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+
+        String url = switch (papelNorm) {
+            case "PECUARISTA" -> entity.getUrlAssinaturaPecuarista();
+            case "MOTORISTA" -> entity.getUrlAssinaturaMotorista();
+            case "MANOBRISTA" -> entity.getUrlAssinaturaManobrista();
+            case "CURRALEIRO" -> entity.getUrlAssinaturaCurraleiro();
+            default -> throw new IllegalArgumentException("Papel de assinante inválido: " + papel);
+        };
+
+        if (url == null || url.isBlank()) {
+            throw new AssinaturaNaoEncontradaException("Nenhuma assinatura cadastrada para o papel " + papel + " no relatório " + id);
+        }
+
+        // Caso 1: Aponta para DocumentoService (/api/v1/documentos/{uuid}/conteudo)
+        if (url.contains("/api/v1/documentos/")) {
+            String uuidStr = url.substring(url.indexOf("/api/v1/documentos/") + "/api/v1/documentos/".length());
+            if (uuidStr.contains("/")) {
+                uuidStr = uuidStr.substring(0, uuidStr.indexOf("/"));
+            }
+            try {
+                UUID docId = UUID.fromString(uuidStr.trim());
+                if (documentoService != null) {
+                    return documentoService.buscarConteudo(docId);
+                }
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        // Caso 2: Aponta para AssinaturaMotorista fixa (/api/v1/usuarios/...)
+        if (papelNorm.equals("MOTORISTA") && (url.contains("/api/v1/usuarios/") || entity.getMotoristaId() != null)) {
+            if (assinaturaRepository != null) {
+                var assOpt = assinaturaRepository.findByMotoristaIdAndAtivaTrue(entity.getMotoristaId());
+                if (assOpt.isPresent()) {
+                    byte[] bytes = assOpt.get().getConteudo();
+                    return new DocumentoConteudo(
+                            new ByteArrayResource(bytes),
+                            "image/png",
+                            bytes.length,
+                            "assinatura-motorista-" + id + ".png"
+                    );
+                }
+            }
+        }
+
+        throw new AssinaturaNaoEncontradaException("Conteúdo da assinatura não localizado para " + papel + " no relatório " + id);
     }
 
     @Transactional

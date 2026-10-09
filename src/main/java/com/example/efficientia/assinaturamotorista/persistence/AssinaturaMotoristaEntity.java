@@ -58,9 +58,8 @@ public class AssinaturaMotoristaEntity {
     @Column(name = "atualizado_em", nullable = false)
     private Instant atualizadoEm;
 
-    @Version
     @Column(name = "versao", nullable = false)
-    private Long versao;
+    private Long versao = 0L;
 
     public AssinaturaMotoristaEntity() {
     }
