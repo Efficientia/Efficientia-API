@@ -230,6 +230,7 @@ class AssinaturaMotoristaServiceTest {
 
         ArgumentCaptor<AssinaturaMotoristaEntity> captor = ArgumentCaptor.forClass(AssinaturaMotoristaEntity.class);
         verify(assinaturaRepository, times(2)).save(captor.capture());
+        verify(assinaturaRepository, times(1)).flush();
 
         // Primeira chamada: salvando anterior desativada
         AssinaturaMotoristaEntity anteriorSalva = captor.getAllValues().get(0);
