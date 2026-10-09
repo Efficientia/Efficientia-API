@@ -95,4 +95,21 @@ public class AssinaturaMotoristaExceptionHandler {
         problem.setType(URI.create("https://efficientia.com/errors/erro-requisicao"));
         return problem;
     }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ProblemDetail handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        String msg = ex.getMessage() != null ? ex.getMessage() : "";
+        String detalhe;
+        if (msg.contains("idempotency_key") || msg.contains("uq_assinatura_motorista_idempotency")) {
+            detalhe = "Conflito na chave de idempotência informada. Gere uma nova chave para enviar outra assinatura.";
+        } else if (msg.contains("uq_assinatura_motorista_ativa")) {
+            detalhe = "Conflito de concorrência ao substituir assinatura ativa. Tente novamente.";
+        } else {
+            detalhe = "Conflito de integridade ao persistir a assinatura do motorista.";
+        }
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, detalhe);
+        problem.setTitle("Conflito ao Persistir Assinatura");
+        problem.setType(URI.create("https://efficientia.com/errors/conflito-assinatura"));
+        return problem;
+    }
 }

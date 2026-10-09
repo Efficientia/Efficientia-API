@@ -553,6 +553,43 @@ class AssinaturaMotoristaControllerTest {
     }
 
     @Test
+    @DisplayName("Violação de integridade em chave de idempotência retorna 409 Conflict com mensagem explicativa")
+    void deveRetornar409QuandoHouverViolacaoDeIntegridade() throws Exception {
+        UUID key = UUID.randomUUID();
+        when(service.salvarOuAtualizarAssinatura(eq(42), eq(42), eq(key), any(), any(byte[].class), eq(true)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("duplicate key value violates unique constraint \"idempotency_key\""));
+
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(criarArquivoValido())
+                        .file(criarMetadadosValidos(ModalidadeAssinaturaMotorista.DESENHO, null))
+                        .header("Idempotency-Key", key.toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflito ao Persistir Assinatura"))
+                .andExpect(jsonPath("$.detail").value("Conflito na chave de idempotência informada. Gere uma nova chave para enviar outra assinatura."));
+    }
+
+    @Test
+    @DisplayName("Reenvio com mesma chave de idempotência retorna 200 OK com a assinatura existente")
+    void deveRetornar200EmReenvioComMesmaChaveDeIdempotencia() throws Exception {
+        UUID key = UUID.randomUUID();
+        when(service.salvarOuAtualizarAssinatura(eq(42), eq(42), eq(key), any(), any(byte[].class), eq(true)))
+                .thenReturn(criarResponsePadrao(UUID.randomUUID(), 42, true));
+
+        mockMvc.perform(multipart("/api/v1/usuarios/me/assinatura")
+                        .file(criarArquivoValido())
+                        .file(criarMetadadosValidos(ModalidadeAssinaturaMotorista.DESENHO, null))
+                        .header("Idempotency-Key", key.toString())
+                        .with(request -> { request.setMethod("PUT"); return request; })
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_MOTORISTA"))
+                                .jwt(token -> token.claim("usuario_id", 42))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.usuarioId").value(42));
+    }
+
+    @Test
     @DisplayName("Funcionário Friboi pode consultar o conteúdo da assinatura de terceiro")
     void devePermitirConteudoDeTerceiroPorFuncionarioFriboi() throws Exception {
         when(service.buscarConteudoAssinaturaAtiva(eq(99))).thenReturn(VALID_PNG_BYTES);
