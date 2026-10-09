@@ -12,7 +12,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import java.net.URI;
 import java.util.LinkedHashMap;
 
-@RestControllerAdvice
+@RestControllerAdvice(basePackages = {"com.example.efficientia.cadastrobase", "com.example.efficientia.empresa"})
 public class CadastroBaseExceptionHandler {
 
     @ExceptionHandler(CadastroDuplicadoException.class)

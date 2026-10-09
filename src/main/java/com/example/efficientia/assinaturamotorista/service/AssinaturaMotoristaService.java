@@ -72,10 +72,11 @@ public class AssinaturaMotoristaService {
         long proximaVersao = 0L;
         if (ativaOpt.isPresent()) {
             AssinaturaMotoristaEntity ativaAnterior = ativaOpt.get();
+            proximaVersao = (ativaAnterior.getVersao() != null ? ativaAnterior.getVersao() : 0L) + 1L;
             ativaAnterior.setAtiva(false);
             ativaAnterior.setAtualizadoEm(Instant.now());
             assinaturaRepository.save(ativaAnterior);
-            proximaVersao = (ativaAnterior.getVersao() != null ? ativaAnterior.getVersao() : 0L) + 1L;
+            assinaturaRepository.flush();
         }
 
         // 5. Inserir nova versão ativa
