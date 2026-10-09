@@ -171,6 +171,17 @@ class AssinaturaValidatorTest {
         assertTextoInvalido(requestTexto("😀".repeat(151)));
     }
 
+    @Test
+    void deveAceitarAssinaturaComPapelPecuarista() {
+        DocumentoMetadataRequest request = new DocumentoMetadataRequest(
+                1, TipoDocumento.ASSINATURA, OrigemDocumento.DESENHO,
+                2, PapelAssinante.PECUARISTA, ModalidadeAssinatura.DESENHO, "Assinatura do Pecuarista"
+        );
+
+        assertThatCode(() -> validator.validarArquivo(request, "image/png"))
+                .doesNotThrowAnyException();
+    }
+
     private void assertArquivoInvalido(DocumentoMetadataRequest request, String mimeType) {
         assertThatThrownBy(() -> validator.validarArquivo(request, mimeType))
                 .isInstanceOf(DocumentoInvalidoException.class);

@@ -276,6 +276,19 @@ Endpoints dedicados à assinatura fixa de perfil do motorista, armazenada como i
 - **O que faz:** Envia o relatório completo para análise (`pendente`), usando as mesmas validações da submissão do formulário.
 - **Header:** `Idempotency-Key: <UUID>` obrigatório se ainda não houver chave vinculada ao relatório.
 
+
+#### `PUT /api/v1/relatorios-viagem/{id}/assinaturas/{papel}` — Upload de Assinatura de Participante (PNG)
+- **O que faz:** Realiza o upload da assinatura desenhada ou digitada de um participante da viagem (`pecuarista`, `motorista`, `manobrista` ou `curraleiro`), validando magic bytes do PNG e persistindo o arquivo no storage gerenciado.
+- **Headers:** `Authorization: Bearer <token>`, `Idempotency-Key: <UUID>` (opcional, recomendado).
+- **Formato:** `multipart/form-data` com partes:
+  - `arquivo`: Arquivo PNG transparente (máx. 1 MB).
+  - `metadados` (opcional, JSON): `{"modalidade": "DESENHO", "textoOrigem": "..."}`.
+- **Resposta (200 OK):** Retorna `RelatorioViagemResponse` atualizado com a URL correspondente vinculada.
+
+#### `GET /api/v1/relatorios-viagem/{id}/assinaturas/{papel}/conteudo` — Download / Streaming da Imagem PNG
+- **O que faz:** Transmite os bytes binários do PNG da assinatura vinculada ao relatório para renderização na Web ou no Mobile.
+- **Headers:** `Authorization: Bearer <token>`.
+- **Headers de Resposta:** `Content-Type: image/png`, `Content-Disposition: inline; filename="assinatura-{papel}-{id}.png"`.
 ---
 
 ### 📄 4.5 Gerenciamento de Documentos e Anexos (`/api/v1/documentos`) (`PROTEGIDO`)

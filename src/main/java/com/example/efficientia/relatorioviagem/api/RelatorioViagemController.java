@@ -12,8 +12,18 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaFormatoInvalidoException;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaMotoristaContracts.AssinaturaMetadadosRequest;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaNaoEncontradaException;
+import com.example.efficientia.assinaturamotorista.api.AssinaturaTamanhoExcedidoException;
+import com.example.efficientia.documento.service.DocumentoConteudo;
+import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -27,13 +37,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
-
 @Tag(name = "Relatórios de Viagem", description = "Endpoints do fluxo de 6 etapas do diário de rota mobile, rascunhos, submissões e auditoria")
 @RestController
 @RequestMapping("/api/v1/relatorios-viagem")
@@ -178,6 +189,52 @@ public class RelatorioViagemController {
         return service.registrarAssinaturaPapel(id, papel, urlAssinatura);
     }
 
+    @Operation(
+            summary = "Upload de assinatura PNG de participante da viagem (Pecuarista, Manobrista, Curraleiro, Motorista)",
+            description = "Recebe arquivo PNG de até 1 MB via multipart/form-data, valida magic bytes e vincula diretamente ao diário de rota."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Assinatura vinculada com sucesso ao relatório"),
+            @ApiResponse(responseCode = "400", description = "Papel inválido, relatório finalizado ou parâmetros inconsistentes"),
+            @ApiResponse(responseCode = "401", description = "Não autenticado"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado para este relatório"),
+            @ApiResponse(responseCode = "404", description = "Relatório não encontrado"),
+            @ApiResponse(responseCode = "413", description = "Arquivo de assinatura excede o limite de 1 MB"),
+            @ApiResponse(responseCode = "415", description = "Arquivo não é uma imagem PNG autêntica")
+    })
+    @PutMapping(value = "/{id}/assinaturas/{papel}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public RelatorioViagemResponse salvarAssinaturaParticipante(
+            @PathVariable Integer id,
+            @PathVariable String papel,
+            @RequestHeader(name = "Idempotency-Key", required = false) UUID idempotencyKey,
+            @RequestPart("arquivo") MultipartFile arquivo,
+            @RequestPart(value = "metadados", required = false) @Valid AssinaturaMetadadosRequest metadados,
+            Authentication authentication
+    ) {
+        return service.salvarAssinaturaParticipanteMultipart(id, papel, idempotencyKey, arquivo, metadados, authentication);
+    }
+
+    @Operation(
+            summary = "Download/streaming da imagem PNG da assinatura de um participante do relatório",
+            description = "Transmite os bytes binários do PNG da assinatura vinculada ao relatório."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Imagem transmitida com sucesso"),
+            @ApiResponse(responseCode = "404", description = "Assinatura ou relatório não encontrado")
+    })
+    @GetMapping(value = "/{id}/assinaturas/{papel}/conteudo", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<Resource> buscarConteudoAssinaturaParticipante(
+            @PathVariable Integer id,
+            @PathVariable String papel
+    ) {
+        DocumentoConteudo conteudo = service.buscarConteudoAssinaturaParticipante(id, papel);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"assinatura-" + papel.toLowerCase() + "-" + id + ".png\"")
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .body(conteudo.resource());
+    }
+
     @Operation(summary = "Enviar relatório de viagem para análise/auditoria")
     @PatchMapping("/{id}/enviar")
     public RelatorioViagemResponse enviarParaAnalise(
@@ -239,6 +296,27 @@ public class RelatorioViagemController {
         );
         problem.setTitle("Campos Inválidos");
         problem.setProperty("fieldErrors", errors);
+        return problem;
+    }
+
+    @ExceptionHandler(AssinaturaNaoEncontradaException.class)
+    public ProblemDetail handleAssinaturaNaoEncontrada(AssinaturaNaoEncontradaException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Assinatura Não Encontrada");
+        return problem;
+    }
+
+    @ExceptionHandler(AssinaturaFormatoInvalidoException.class)
+    public ProblemDetail handleAssinaturaFormatoInvalido(AssinaturaFormatoInvalidoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+        problem.setTitle("Formato de Assinatura Inválido");
+        return problem;
+    }
+
+    @ExceptionHandler(AssinaturaTamanhoExcedidoException.class)
+    public ProblemDetail handleAssinaturaTamanhoExcedido(AssinaturaTamanhoExcedidoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.PAYLOAD_TOO_LARGE, ex.getMessage());
+        problem.setTitle("Tamanho da Assinatura Excedido");
         return problem;
     }
 }

@@ -1128,4 +1128,84 @@ class RelatorioViagemServiceTest {
         entity.setQuantidadeEmergencia(0);
         return entity;
     }
+
+    @Test
+    void deveSalvarAssinaturaParticipanteMultipartComSucesso() {
+        RelatorioViagemRepository repo = mock(RelatorioViagemRepository.class);
+        RelatorioViagemEntity rel = relatorioCompleto();
+        rel.setStatus("rascunho");
+
+        when(repo.findById(1)).thenReturn(java.util.Optional.of(rel));
+        when(repo.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        RelatorioViagemService serv = new RelatorioViagemService(repo, null, null, null, null, null, null);
+
+        byte[] validPng = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00};
+        org.springframework.mock.web.MockMultipartFile arquivo = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "pecuarista.png", "image/png", validPng
+        );
+
+        var response = serv.salvarAssinaturaParticipanteMultipart(
+                1, "pecuarista", UUID.randomUUID(), arquivo, null, null
+        );
+
+        assertNotNull(response);
+        assertEquals("/api/v1/relatorios-viagem/1/assinaturas/pecuarista/conteudo", response.urlAssinaturaPecuarista());
+    }
+
+    @Test
+    void deveRejeitarSalvarAssinaturaComPapelInvalido() {
+        RelatorioViagemRepository repo = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService serv = new RelatorioViagemService(repo);
+
+        byte[] validPng = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        org.springframework.mock.web.MockMultipartFile arquivo = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "pecuarista.png", "image/png", validPng
+        );
+
+        assertThrows(ValidacaoDiarioRotaException.class, () ->
+                serv.salvarAssinaturaParticipanteMultipart(1, "invalido", null, arquivo, null, null)
+        );
+    }
+
+    @Test
+    void deveRejeitarSalvarAssinaturaEmRelatorioFinalizado() {
+        RelatorioViagemRepository repo = mock(RelatorioViagemRepository.class);
+        RelatorioViagemEntity rel = relatorioCompleto();
+        rel.setStatus("aprovado");
+
+        when(repo.findById(1)).thenReturn(java.util.Optional.of(rel));
+        RelatorioViagemService serv = new RelatorioViagemService(repo);
+
+        byte[] validPng = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        org.springframework.mock.web.MockMultipartFile arquivo = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "pecuarista.png", "image/png", validPng
+        );
+
+        assertThrows(ValidacaoDiarioRotaException.class, () ->
+                serv.salvarAssinaturaParticipanteMultipart(1, "pecuarista", null, arquivo, null, null)
+        );
+    }
+
+    @Test
+    void deveBuscarConteudoAssinaturaMotoristaFixa() {
+        RelatorioViagemRepository repo = mock(RelatorioViagemRepository.class);
+        AssinaturaMotoristaRepository assRepo = mock(AssinaturaMotoristaRepository.class);
+        RelatorioViagemEntity rel = relatorioCompleto();
+        rel.setUrlAssinaturaMotorista("/api/v1/usuarios/3/assinatura/conteudo");
+
+        when(repo.findById(1)).thenReturn(java.util.Optional.of(rel));
+
+        AssinaturaMotoristaEntity assEntity = new AssinaturaMotoristaEntity();
+        byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        assEntity.setConteudo(pngBytes);
+        when(assRepo.findByMotoristaIdAndAtivaTrue(3)).thenReturn(java.util.Optional.of(assEntity));
+
+        RelatorioViagemService serv = new RelatorioViagemService(repo, null, assRepo, null, null, null, null);
+
+        var conteudo = serv.buscarConteudoAssinaturaParticipante(1, "motorista");
+        assertNotNull(conteudo);
+        assertEquals("image/png", conteudo.mimeType());
+        assertEquals(pngBytes.length, conteudo.tamanhoBytes());
+    }
 }

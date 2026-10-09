@@ -302,6 +302,73 @@ class RelatorioViagemControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+
+    @Test
+    void deveSalvarAssinaturaParticipanteMultipartComSucesso() throws Exception {
+        org.springframework.mock.web.MockMultipartFile arquivo = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "assinatura.png", "image/png", new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+        );
+        org.springframework.mock.web.MockMultipartFile metadados = new org.springframework.mock.web.MockMultipartFile(
+                "metadados", "metadados.json", "application/json", "{\"modalidade\":\"DESENHO\"}".getBytes()
+        );
+
+        when(service.salvarAssinaturaParticipanteMultipart(eq(42), eq("pecuarista"), any(), any(), any(), any()))
+                .thenReturn(respostaRelatorio());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                                org.springframework.http.HttpMethod.PUT, "/api/v1/relatorios-viagem/42/assinaturas/pecuarista"
+                        )
+                        .file(arquivo)
+                        .file(metadados)
+                        .header("Idempotency-Key", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(42));
+    }
+
+    @Test
+    void deveRetornar400AoSalvarAssinaturaComPapelInvalido() throws Exception {
+        org.springframework.mock.web.MockMultipartFile arquivo = new org.springframework.mock.web.MockMultipartFile(
+                "arquivo", "assinatura.png", "image/png", new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
+        );
+
+        when(service.salvarAssinaturaParticipanteMultipart(eq(42), eq("invalido"), any(), any(), any(), any()))
+                .thenThrow(new ValidacaoDiarioRotaException("Papel de assinante inválido.", java.util.Map.of("papel", "Papel inválido.")));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                                org.springframework.http.HttpMethod.PUT, "/api/v1/relatorios-viagem/42/assinaturas/invalido"
+                        )
+                        .file(arquivo))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.papel").value("Papel inválido."));
+    }
+
+    @Test
+    void deveBuscarConteudoAssinaturaParticipanteComSucesso() throws Exception {
+        byte[] pngBytes = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        com.example.efficientia.documento.service.DocumentoConteudo conteudo =
+                new com.example.efficientia.documento.service.DocumentoConteudo(
+                        new org.springframework.core.io.ByteArrayResource(pngBytes),
+                        "image/png",
+                        pngBytes.length,
+                        "assinatura-pecuarista-42.png"
+                );
+
+        when(service.buscarConteudoAssinaturaParticipante(42, "pecuarista")).thenReturn(conteudo);
+
+        mockMvc.perform(get("/api/v1/relatorios-viagem/42/assinaturas/pecuarista/conteudo"))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.content().contentType(org.springframework.http.MediaType.IMAGE_PNG))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Content-Disposition", "inline; filename=\"assinatura-pecuarista-42.png\""));
+    }
+
+    @Test
+    void deveRetornar404QuandoConteudoAssinaturaNaoExistir() throws Exception {
+        when(service.buscarConteudoAssinaturaParticipante(42, "pecuarista"))
+                .thenThrow(new com.example.efficientia.assinaturamotorista.api.AssinaturaNaoEncontradaException("Assinatura não encontrada."));
+
+        mockMvc.perform(get("/api/v1/relatorios-viagem/42/assinaturas/pecuarista/conteudo"))
+                .andExpect(status().isNotFound());
+    }
     private RelatorioViagemResponse respostaRelatorio() {
         return new RelatorioViagemResponse(
                 42, 12, 18, 2, 3, 4, 5, "GTA-42", "NF-42",
