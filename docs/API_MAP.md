@@ -197,6 +197,14 @@ Todos estes endpoints exigem `Authorization: Bearer <token>`:
 
 Endpoints dedicados à assinatura fixa de perfil do motorista, armazenada como imagem PNG transparente em banco (`BYTEA`) com validação de magic bytes, SHA-256 e versionamento imutável.
 
+#### Foto de perfil do motorista
+
+- `PUT /api/v1/usuarios/me/foto`: `multipart/form-data` com parte `arquivo` (JPEG ou PNG, até 2 MB). O motorista é identificado pelo JWT; `204` confirma a substituição, `413` indica tamanho excessivo e `415` formato inválido.
+- `GET /api/v1/usuarios/me/foto/conteudo`: retorna o binário com `Content-Type` correspondente e `Cache-Control: private, no-store`; `404` quando não há foto.
+- `DELETE /api/v1/usuarios/me/foto`: remove a foto da conta e retorna `204` (inclusive se não havia foto).
+
+A imagem é persistida em `sc_corporativo.tb_usuario` pela migration V14. O app mantém apenas uma cópia local para exibição e consulta novamente a API após autenticar.
+
 ##### `PUT /api/v1/usuarios/me/assinatura` — Cadastro / Atualização pelo próprio Motorista
 - **O que faz:** Cadastra ou substitui a assinatura fixa do motorista logado (obtido via JWT).
 - **Autenticação:** Protegida (`hasRole("ROLE_MOTORISTA")`).

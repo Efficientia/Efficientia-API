@@ -13,6 +13,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
+import java.time.Instant;
 
 @Entity
 @Table(name = "tb_usuario", schema = "sc_corporativo")
@@ -56,6 +57,15 @@ public class UsuarioEntity {
 
     @Column(name = "url_assinatura_geral", columnDefinition = "TEXT")
     private String urlAssinaturaGeral;
+
+    @Column(name = "foto_perfil", columnDefinition = "BYTEA")
+    private byte[] fotoPerfil;
+
+    @Column(name = "foto_perfil_mime", length = 30)
+    private String fotoPerfilMime;
+
+    @Column(name = "foto_perfil_atualizada_em")
+    private Instant fotoPerfilAtualizadaEm;
 
     @Column(name = "cargo", length = 150)
     private String cargo;
@@ -107,6 +117,13 @@ public class UsuarioEntity {
 
     public String getUrlAssinaturaGeral() { return urlAssinaturaGeral; }
     public void setUrlAssinaturaGeral(String urlAssinaturaGeral) { this.urlAssinaturaGeral = urlAssinaturaGeral; }
+
+    public byte[] getFotoPerfil() { return fotoPerfil; }
+    public void setFotoPerfil(byte[] fotoPerfil) { this.fotoPerfil = fotoPerfil; }
+    public String getFotoPerfilMime() { return fotoPerfilMime; }
+    public void setFotoPerfilMime(String fotoPerfilMime) { this.fotoPerfilMime = fotoPerfilMime; }
+    public Instant getFotoPerfilAtualizadaEm() { return fotoPerfilAtualizadaEm; }
+    public void setFotoPerfilAtualizadaEm(Instant fotoPerfilAtualizadaEm) { this.fotoPerfilAtualizadaEm = fotoPerfilAtualizadaEm; }
 
     public String getCargo() { return cargo; }
     public void setCargo(String cargo) { this.cargo = cargo; }
