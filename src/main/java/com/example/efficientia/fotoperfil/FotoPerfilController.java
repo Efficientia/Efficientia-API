@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
@@ -65,6 +66,11 @@ public class FotoPerfilController {
     private Integer usuarioId(Authentication authentication) {
         if (!(authentication instanceof JwtAuthenticationToken jwt)) {
             throw new ResponseStatusException(UNAUTHORIZED, "Usuário não autenticado.");
+        }
+        boolean motorista = jwt.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_MOTORISTA".equalsIgnoreCase(authority.getAuthority()));
+        if (!motorista) {
+            throw new ResponseStatusException(FORBIDDEN, "Acesso restrito ao motorista.");
         }
         Object claim = jwt.getToken().getClaim("usuario_id");
         try {
