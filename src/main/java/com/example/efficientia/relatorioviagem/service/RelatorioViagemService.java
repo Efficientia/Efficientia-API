@@ -265,10 +265,42 @@ public class RelatorioViagemService {
         );
     }
 
+    public RelatorioViagemPageResponse listar(int pagina, int tamanho, Authentication authentication) {
+        validarPaginacao(pagina, tamanho);
+        if (authentication == null || !authentication.isAuthenticated())
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Autenticação necessária.");
+        if (!isPerfilMotorista(authentication)) return listar(pagina, tamanho);
+        return listarDoMotorista(pagina, tamanho, authentication);
+    }
+
+    public RelatorioViagemPageResponse listarDoMotorista(int pagina, int tamanho,
+                                                          Authentication authentication) {
+        validarPaginacao(pagina, tamanho);
+        Integer usuarioId = extrairUsuarioId(authentication);
+        if (usuarioId == null) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED, "JWT sem identificação de usuário.");
+        var pageable = PageRequest.of(pagina, tamanho,
+                Sort.by(Sort.Order.desc("atualizadoEm"), Sort.Order.desc("id")));
+        return RelatorioViagemPageResponse.from(repository.findByMotoristaId(usuarioId, pageable)
+                .map(this::montarResponseCompleta));
+    }
+
     public RelatorioViagemResponse buscar(Integer id) {
         return repository.findById(id)
                 .map(this::montarResponseCompleta)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+    }
+
+    public RelatorioViagemResponse buscar(Integer id, Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated())
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Autenticação necessária.");
+        RelatorioViagemResponse response = buscar(id);
+        if (isPerfilMotorista(authentication)
+                && !java.util.Objects.equals(response.motoristaId(), extrairUsuarioId(authentication)))
+            throw new RelatorioViagemNotFoundException(id);
+        return response;
     }
 
     @Transactional
@@ -703,6 +735,8 @@ public class RelatorioViagemService {
     ) {
         if (request.fazendaId() != null) entity.setFazendaId(request.fazendaId());
         if (request.unidadeFrigorificaId() != null) entity.setUnidadeFrigorificaId(request.unidadeFrigorificaId());
+        if (request.nomeOrigem() != null) entity.setNomeOrigem(request.nomeOrigem().trim());
+        if (request.nomeDestino() != null) entity.setNomeDestino(request.nomeDestino().trim());
         if (motoristaIdResolvido != null) entity.setMotoristaId(motoristaIdResolvido);
         if (empresaIdResolvido != null) entity.setEmpresaId(empresaIdResolvido);
         if (request.manobristaId() != null) entity.setManobristaId(request.manobristaId());
@@ -771,12 +805,14 @@ public class RelatorioViagemService {
             paradaImprevistaRepository.deleteByRelatorioId(relatorioId);
             for (ParadaImprevistaDto dto : request.paradasImprevistas()) {
                 if (dto != null && dto.motivo() != null && dto.dataHoraInicio() != null && dto.dataHoraFim() != null) {
-                    paradaImprevistaRepository.save(new ParadaImprevistaEntity(
+                    ParadaImprevistaEntity parada = new ParadaImprevistaEntity(
                             relatorioId,
                             dto.motivo().trim(),
                             dto.dataHoraInicio(),
                             dto.dataHoraFim()
-                    ));
+                    );
+                    parada.setDescricaoMotivo(dto.descricaoMotivo());
+                    paradaImprevistaRepository.save(parada);
                 }
             }
         }

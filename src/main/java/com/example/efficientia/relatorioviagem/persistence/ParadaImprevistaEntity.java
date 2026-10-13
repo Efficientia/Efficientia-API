@@ -23,6 +23,9 @@ public class ParadaImprevistaEntity {
     @Column(name = "motivo", nullable = false, length = 50)
     private String motivo;
 
+    @Column(name = "descricao_motivo", length = 255)
+    private String descricaoMotivo;
+
     @Column(name = "data_hora_inicio", nullable = false)
     private LocalDateTime dataHoraInicio;
 
@@ -45,6 +48,8 @@ public class ParadaImprevistaEntity {
     public void setRelatorioId(Integer relatorioId) { this.relatorioId = relatorioId; }
     public String getMotivo() { return motivo; }
     public void setMotivo(String motivo) { this.motivo = motivo; }
+    public String getDescricaoMotivo() { return descricaoMotivo; }
+    public void setDescricaoMotivo(String descricaoMotivo) { this.descricaoMotivo = descricaoMotivo; }
     public LocalDateTime getDataHoraInicio() { return dataHoraInicio; }
     public void setDataHoraInicio(LocalDateTime dataHoraInicio) { this.dataHoraInicio = dataHoraInicio; }
     public LocalDateTime getDataHoraFim() { return dataHoraFim; }

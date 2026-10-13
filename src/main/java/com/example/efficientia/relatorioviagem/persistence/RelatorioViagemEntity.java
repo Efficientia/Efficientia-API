@@ -38,85 +38,91 @@ public class RelatorioViagemEntity {
     @Column(name = "unidade_frigorifica_id")
     private Integer unidadeFrigorificaId;
 
+    @Column(name = "nome_origem", length = 150)
+    private String nomeOrigem;
+
+    @Column(name = "nome_destino", length = 150)
+    private String nomeDestino;
+
     @Column(name = "idempotency_key")
     private UUID idempotencyKey;
 
     @Column(name = "atualizado_em")
     private LocalDateTime atualizadoEm;
 
-    @Column(name = "fazenda_id", nullable = false)
+    @Column(name = "fazenda_id")
     private Integer fazendaId;
 
     @Column(name = "motorista_id", nullable = false)
     private Integer motoristaId;
 
-    @Column(name = "manobrista_id", nullable = false)
+    @Column(name = "manobrista_id")
     private Integer manobristaId;
 
-    @Column(name = "curraleiro_id", nullable = false)
+    @Column(name = "curraleiro_id")
     private Integer curraleiroId;
 
-    @Column(name = "cavalo_id", nullable = false)
+    @Column(name = "cavalo_id")
     private Integer cavaloId;
 
-    @Column(name = "carreta_id", nullable = false)
+    @Column(name = "carreta_id")
     private Integer carretaId;
 
-    @Column(name = "numero_gta", nullable = false, unique = true, length = 50)
+    @Column(name = "numero_gta", unique = true, length = 50)
     private String numeroGta;
 
-    @Column(name = "numero_nota_fiscal", nullable = false, length = 50)
+    @Column(name = "numero_nota_fiscal", length = 50)
     private String numeroNotaFiscal;
 
-    @Column(name = "data_embarque", nullable = false)
+    @Column(name = "data_embarque")
     private LocalDate dataEmbarque;
 
-    @Column(name = "horario_embarque", nullable = false)
+    @Column(name = "horario_embarque")
     private LocalTime horarioEmbarque;
 
-    @Column(name = "horario_saida_propriedade", nullable = false)
+    @Column(name = "horario_saida_propriedade")
     private LocalTime horarioSaidaPropriedade;
 
-    @Column(name = "km_saida_embarcadouro", nullable = false)
+    @Column(name = "km_saida_embarcadouro")
     private Integer kmSaidaEmbarcadouro;
 
-    @Column(name = "data_chegada_unidade", nullable = false)
+    @Column(name = "data_chegada_unidade")
     private LocalDate dataChegadaUnidade;
 
-    @Column(name = "horario_chegada_unidade", nullable = false)
+    @Column(name = "horario_chegada_unidade")
     private LocalTime horarioChegadaUnidade;
 
-    @Column(name = "horario_desembarque", nullable = false)
+    @Column(name = "horario_desembarque")
     private LocalTime horarioDesembarque;
 
-    @Column(name = "km_chegada_desembarcadouro", nullable = false)
+    @Column(name = "km_chegada_desembarcadouro")
     private Integer kmChegadaDesembarcadouro;
 
-    @Column(name = "numero_curral", nullable = false, length = 20)
+    @Column(name = "numero_curral", length = 20)
     private String numeroCurral;
 
-    @Column(name = "sirene_re_funcionou", nullable = false)
+    @Column(name = "sirene_re_funcionou")
     private Boolean sireneReFuncionou;
 
-    @Column(name = "qtd_machos", nullable = false)
+    @Column(name = "qtd_machos")
     private Integer quantidadeMachos;
 
-    @Column(name = "qtd_femeas", nullable = false)
+    @Column(name = "qtd_femeas")
     private Integer quantidadeFemeas;
 
-    @Column(name = "qtd_marrucos", nullable = false)
+    @Column(name = "qtd_marrucos")
     private Integer quantidadeMarrucos;
 
-    @Column(name = "qtd_em_pe", nullable = false)
+    @Column(name = "qtd_em_pe")
     private Integer quantidadeEmPe;
 
-    @Column(name = "qtd_deitado", nullable = false)
+    @Column(name = "qtd_deitado")
     private Integer quantidadeDeitado;
 
-    @Column(name = "qtd_morto", nullable = false)
+    @Column(name = "qtd_morto")
     private Integer quantidadeMorto;
 
-    @Column(name = "qtd_emergencia", nullable = false)
+    @Column(name = "qtd_emergencia")
     private Integer quantidadeEmergencia;
 
     @Column(name = "motivo_emergencia")
@@ -151,6 +157,8 @@ public class RelatorioViagemEntity {
     public Integer getId() { return id; }
     public void setId(Integer id) { this.id = id; }
     public Integer getFazendaId() { return fazendaId; }
+    public String getNomeOrigem() { return nomeOrigem; }
+    public String getNomeDestino() { return nomeDestino; }
     public Integer getMotoristaId() { return motoristaId; }
     public Integer getManobristaId() { return manobristaId; }
     public Integer getCurraleiroId() { return curraleiroId; }
@@ -184,6 +192,8 @@ public class RelatorioViagemEntity {
     public LocalDateTime getCriadoEm() { return criadoEm; }
 
     public void setFazendaId(Integer fazendaId) { this.fazendaId = fazendaId; }
+    public void setNomeOrigem(String nomeOrigem) { this.nomeOrigem = nomeOrigem; }
+    public void setNomeDestino(String nomeDestino) { this.nomeDestino = nomeDestino; }
     public void setMotoristaId(Integer motoristaId) { this.motoristaId = motoristaId; }
     public void setManobristaId(Integer manobristaId) { this.manobristaId = manobristaId; }
     public void setCurraleiroId(Integer curraleiroId) { this.curraleiroId = curraleiroId; }

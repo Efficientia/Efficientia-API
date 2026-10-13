@@ -79,6 +79,11 @@ class EfficientiaApplicationTests {
 		}
 
 		@Bean
+		com.example.efficientia.cadastrobase.persistence.UnidadeFrigorificaRepository unidadeFrigorificaRepository() {
+			return Mockito.mock(com.example.efficientia.cadastrobase.persistence.UnidadeFrigorificaRepository.class);
+		}
+
+		@Bean
 		VeiculoCavaloRepository veiculoCavaloRepository() {
 			return Mockito.mock(VeiculoCavaloRepository.class);
 		}

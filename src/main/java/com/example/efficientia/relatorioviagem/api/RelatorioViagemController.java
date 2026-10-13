@@ -125,15 +125,26 @@ public class RelatorioViagemController {
     @GetMapping
     public RelatorioViagemPageResponse listar(
             @RequestParam(defaultValue = "0") int pagina,
-            @RequestParam(defaultValue = "20") int tamanho
+            @RequestParam(defaultValue = "20") int tamanho,
+            Authentication authentication
     ) {
-        return service.listar(pagina, tamanho);
+        return service.listar(pagina, tamanho, authentication);
+    }
+
+    @Operation(summary = "Listar apenas os relatórios do usuário autenticado")
+    @GetMapping("/me")
+    public RelatorioViagemPageResponse listarMe(
+            @RequestParam(defaultValue = "0") int pagina,
+            @RequestParam(defaultValue = "20") int tamanho,
+            Authentication authentication
+    ) {
+        return service.listarDoMotorista(pagina, tamanho, authentication);
     }
 
     @Operation(summary = "Buscar relatório de viagem por ID com paradas e anomalias completas")
     @GetMapping("/{id}")
-    public RelatorioViagemResponse buscar(@PathVariable Integer id) {
-        return service.buscar(id);
+    public RelatorioViagemResponse buscar(@PathVariable Integer id, Authentication authentication) {
+        return service.buscar(id, authentication);
     }
 
     @Operation(summary = "Buscar caminhão vinculado ao relatório")
