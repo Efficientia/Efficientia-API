@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -347,6 +348,55 @@ class RelatorioViagemServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.listar(0, 101));
         assertThrows(com.example.efficientia.relatorioviagem.api.RelatorioViagemNotFoundException.class,
                 () -> service.buscar(999));
+    }
+
+    @Test
+    void deveListarSomenteRelatoriosDoMotoristaAutenticado() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+                .claim("usuario_id", 17).build();
+        var auth = new JwtAuthenticationToken(jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+        RelatorioViagemEntity proprio = relatorioCompleto();
+        proprio.setMotoristaId(17);
+        when(repository.findByMotoristaId(eq(17), any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(proprio)));
+
+        assertEquals(1, service.listar(0, 20, auth).itens().size());
+        verify(repository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void naoDeveEntregarDetalheDeOutroMotorista() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+                .claim("usuario_id", 17).build();
+        var auth = new JwtAuthenticationToken(jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+        RelatorioViagemEntity alheio = relatorioCompleto();
+        alheio.setMotoristaId(18);
+        when(repository.findById(42)).thenReturn(java.util.Optional.of(alheio));
+
+        assertThrows(com.example.efficientia.relatorioviagem.api.RelatorioViagemNotFoundException.class,
+                () -> service.buscar(42, auth));
+    }
+
+    @Test
+    void rascunhoPodeGuardarNomesSemIdsDeLocal() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        var request = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                "{\"status\":\"rascunho\",\"nomeOrigem\":\"Fazenda Aurora\",\"nomeDestino\":\"Frigorífico Sul\"}",
+                CriarRelatorioViagemRequest.class);
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.criar(request);
+
+        assertEquals("Fazenda Aurora", response.nomeOrigem());
+        assertEquals("Frigorífico Sul", response.nomeDestino());
+        assertNull(response.fazendaId());
     }
 
     @Test

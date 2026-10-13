@@ -48,7 +48,7 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveListarRelatoriosComPaginacao() throws Exception {
-        when(service.listar(eq(0), eq(20)))
+        when(service.listar(eq(0), eq(20), nullable(org.springframework.security.core.Authentication.class)))
                 .thenReturn(new RelatorioViagemPageResponse(List.of(), 0, 20, 0, 0));
 
         mockMvc.perform(get("/api/v1/relatorios-viagem"))
@@ -199,7 +199,7 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveBuscarRelatorioPorId() throws Exception {
-        when(service.buscar(42)).thenReturn(respostaRelatorio());
+        when(service.buscar(eq(42), nullable(org.springframework.security.core.Authentication.class))).thenReturn(respostaRelatorio());
 
         mockMvc.perform(get("/api/v1/relatorios-viagem/42"))
                 .andExpect(status().isOk())
@@ -210,7 +210,8 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveRetornar404AoBuscarRelatorioInexistente() throws Exception {
-        when(service.buscar(404)).thenThrow(new RelatorioViagemNotFoundException(404));
+        when(service.buscar(eq(404), nullable(org.springframework.security.core.Authentication.class)))
+                .thenThrow(new RelatorioViagemNotFoundException(404));
 
         mockMvc.perform(get("/api/v1/relatorios-viagem/404"))
                 .andExpect(status().isNotFound());

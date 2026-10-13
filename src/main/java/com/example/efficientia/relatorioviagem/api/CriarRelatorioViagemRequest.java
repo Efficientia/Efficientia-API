@@ -148,8 +148,43 @@ public record CriarRelatorioViagemRequest(
         List<@Valid AnomaliaItemDto> anomaliasEmbarque,
 
         @JsonAlias({"anomalias_desembarque"})
-        List<@Valid AnomaliaItemDto> anomaliasDesembarque
+        List<@Valid AnomaliaItemDto> anomaliasDesembarque,
+
+        @Size(max = 150) String nomeOrigem,
+        @Size(max = 150) String nomeDestino
 ) {
+    /** Keeps existing Java callers source-compatible while the JSON contract grows. */
+    public CriarRelatorioViagemRequest(
+            Integer fazendaId, Integer unidadeFrigorificaId, Integer motoristaId,
+            Integer manobristaId, Integer curraleiroId, Integer cavaloId, Integer carretaId,
+            String placaCavalo, String placaCarreta, String numeroGta, String numeroNotaFiscal,
+            LocalDate dataEmbarque, LocalTime horarioEmbarque, LocalTime horarioSaidaPropriedade,
+            Integer kmSaidaEmbarcadouro, LocalDate dataChegadaUnidade,
+            LocalTime horarioChegadaUnidade, LocalTime horarioDesembarque,
+            Integer kmChegadaDesembarcadouro, String numeroCurral, Boolean sireneReFuncionou,
+            Integer quantidadeMachos, Integer quantidadeFemeas, Integer quantidadeMarrucos,
+            Integer quantidadeEmPe, Integer quantidadeDeitado, Integer quantidadeMorto,
+            Integer quantidadeEmergencia, String motivoEmergencia, String comentarios,
+            String urlAssinaturaPecuarista, String urlAssinaturaMotorista,
+            String urlAssinaturaManobrista, String urlAssinaturaCurraleiro,
+            Integer capacidadeCargaUtilizada, String urlLaudoMortalidade, String status,
+            List<ParadaImprevistaDto> paradasImprevistas,
+            List<AnomaliaItemDto> anomaliasEmbarque,
+            List<AnomaliaItemDto> anomaliasDesembarque
+    ) {
+        this(fazendaId, unidadeFrigorificaId, motoristaId, manobristaId, curraleiroId,
+                cavaloId, carretaId, placaCavalo, placaCarreta, numeroGta, numeroNotaFiscal,
+                dataEmbarque, horarioEmbarque, horarioSaidaPropriedade, kmSaidaEmbarcadouro,
+                dataChegadaUnidade, horarioChegadaUnidade, horarioDesembarque,
+                kmChegadaDesembarcadouro, numeroCurral, sireneReFuncionou,
+                quantidadeMachos, quantidadeFemeas, quantidadeMarrucos, quantidadeEmPe,
+                quantidadeDeitado, quantidadeMorto, quantidadeEmergencia, motivoEmergencia,
+                comentarios, urlAssinaturaPecuarista, urlAssinaturaMotorista,
+                urlAssinaturaManobrista, urlAssinaturaCurraleiro, capacidadeCargaUtilizada,
+                urlLaudoMortalidade, status, paradasImprevistas, anomaliasEmbarque,
+                anomaliasDesembarque, null, null);
+    }
+
     public CriarRelatorioViagemRequest(
             Integer fazendaId, Integer motoristaId, Integer manobristaId, Integer curraleiroId,
             Integer cavaloId, Integer carretaId, String numeroGta, String numeroNotaFiscal,
@@ -170,7 +205,7 @@ public record CriarRelatorioViagemRequest(
                 quantidadeMarrucos, quantidadeEmPe, quantidadeDeitado, quantidadeMorto,
                 quantidadeEmergencia, motivoEmergencia, comentarios, urlAssinaturaPecuarista,
                 urlAssinaturaMotorista, urlAssinaturaManobrista, urlAssinaturaCurraleiro,
-                null, null, "rascunho", null, null, null);
+                null, null, "rascunho", null, null, null, null, null);
     }
 
     public CriarRelatorioViagemRequest(
@@ -194,6 +229,7 @@ public record CriarRelatorioViagemRequest(
                 quantidadeMarrucos, quantidadeEmPe, quantidadeDeitado, quantidadeMorto,
                 quantidadeEmergencia, motivoEmergencia, comentarios, urlAssinaturaPecuarista,
                 urlAssinaturaMotorista, urlAssinaturaManobrista, urlAssinaturaCurraleiro,
-                capacidadeCargaUtilizada, urlLaudoMortalidade, "rascunho", null, null, null);
+                capacidadeCargaUtilizada, urlLaudoMortalidade, "rascunho", null, null, null,
+                null, null);
     }
 }

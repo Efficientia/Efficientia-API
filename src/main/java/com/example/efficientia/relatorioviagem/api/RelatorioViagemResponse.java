@@ -31,7 +31,8 @@ public record RelatorioViagemResponse(
         UUID idempotencyKey,
         List<ParadaImprevistaDto> paradasImprevistas,
         List<AnomaliaItemDto> anomaliasEmbarque,
-        List<AnomaliaItemDto> anomaliasDesembarque
+        List<AnomaliaItemDto> anomaliasDesembarque,
+        String nomeOrigem, String nomeDestino
 ) {
 
     public RelatorioViagemResponse(
@@ -59,7 +60,7 @@ public record RelatorioViagemResponse(
                 quantidadeEmergencia, motivoEmergencia, comentarios, urlAssinaturaPecuarista,
                 urlAssinaturaMotorista, urlAssinaturaManobrista, urlAssinaturaCurraleiro,
                 criadoEm, status, null, null, null, null, null, 0, false, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of(), null, null);
     }
 
     public RelatorioViagemResponse(
@@ -114,7 +115,7 @@ public record RelatorioViagemResponse(
                 urlAssinaturaMotorista, urlAssinaturaManobrista, urlAssinaturaCurraleiro,
                 criadoEm, status, null, enviadoEm, finalizadoEm, capacidadeCargaUtilizada, urlLaudoMortalidade,
                 totalAssinaturasColetadas, assinaturasCompletas, null, null, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of(), null, null);
     }
 
     public static RelatorioViagemResponse from(RelatorioViagemEntity entity) {
@@ -155,7 +156,8 @@ public record RelatorioViagemResponse(
                 entity.getIdempotencyKey(),
                 paradas != null ? paradas : List.of(),
                 anomaliasEmbarque != null ? anomaliasEmbarque : List.of(),
-                anomaliasDesembarque != null ? anomaliasDesembarque : List.of()
+                anomaliasDesembarque != null ? anomaliasDesembarque : List.of(),
+                entity.getNomeOrigem(), entity.getNomeDestino()
         );
     }
 }

@@ -1,6 +1,8 @@
 package com.example.efficientia.relatorioviagem.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +15,7 @@ public interface RelatorioViagemRepository extends JpaRepository<RelatorioViagem
     boolean existsByIdAndMotoristaId(Integer id, Integer motoristaId);
 
     List<RelatorioViagemEntity> findByMotoristaId(Integer motoristaId);
+    Page<RelatorioViagemEntity> findByMotoristaId(Integer motoristaId, Pageable pageable);
 
     List<RelatorioViagemEntity> findByCavaloId(Integer cavaloId);
 

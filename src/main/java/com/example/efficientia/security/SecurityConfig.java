@@ -33,7 +33,12 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .cors(Customizer.withDefaults())
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+                .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/api/v1/relatorios-viagem", "/api/v1/relatorios-viagem/**",
+                                "/api/v1/locais-diario/**").authenticated()
+                        .anyRequest().permitAll())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
+                        jwt.jwtAuthenticationConverter(new JwtRoleConverter())))
                 .build();
     }
 
@@ -94,7 +99,6 @@ public class SecurityConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "app.security.enabled", havingValue = "true", matchIfMissing = true)
     @ConditionalOnMissingBean(JwtDecoder.class)
     JwtDecoder jwtDecoder(SecurityProperties properties) {
         NimbusJwtDecoder decoder;

@@ -455,6 +455,13 @@ Permite o cadastro e gestão independente de caminhões pelo **Portal Web** e a 
 
 ### 🔄 4.9 Fluxo Completo de Onboarding, Frota e Operação Web & Mobile
 
+Para o diário de rota Android, consulte também `docs/INTEGRACAO_DIARIO_MOBILE_2026-10-13.md`:
+`GET /api/v1/locais-diario/fazendas`, `GET /api/v1/locais-diario/unidades-frigorificas`
+e `GET /api/v1/relatorios-viagem/me` oferecem seleção de locais e histórico do
+motorista autenticado. `POST/PUT /api/v1/relatorios-viagem` aceitam rascunhos
+parciais e nomes de origem/destino; a submissão final mantém validação completa
+e `Idempotency-Key`.
+
 
 1. **Criação da Empresa (Portal Web):**
    - Usuário gestor envia razão social, nome, CNPJ e e-mail via `POST /api/v1/empresas`.
