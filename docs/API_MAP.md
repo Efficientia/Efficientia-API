@@ -461,6 +461,9 @@ e `GET /api/v1/relatorios-viagem/me` oferecem seleção de locais e histórico d
 motorista autenticado. `POST/PUT /api/v1/relatorios-viagem` aceitam rascunhos
 parciais e nomes de origem/destino; a submissão final mantém validação completa
 e `Idempotency-Key`.
+Origem e destino também podem ser informados por `nomeOrigem`/`nomeDestino`
+sem IDs de cadastro; nesses casos, os nomes ficam no relatório e não criam
+automaticamente registros mestres de fazenda ou unidade.
 
 
 1. **Criação da Empresa (Portal Web):**
