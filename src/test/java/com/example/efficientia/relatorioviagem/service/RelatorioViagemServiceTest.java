@@ -274,7 +274,7 @@ class RelatorioViagemServiceTest {
                 () -> service.atualizarStatus(8, "pendente", key)
         );
 
-        assertTrue(ex.getFieldErrors().containsKey("fazendaId"));
+        assertTrue(ex.getFieldErrors().containsKey("nomeOrigem"));
         assertTrue(ex.getFieldErrors().containsKey("totalAnimais"));
         verify(repository, never()).save(any(RelatorioViagemEntity.class));
     }
@@ -397,6 +397,42 @@ class RelatorioViagemServiceTest {
         assertEquals("Fazenda Aurora", response.nomeOrigem());
         assertEquals("Frigorífico Sul", response.nomeDestino());
         assertNull(response.fazendaId());
+    }
+
+    @Test
+    void envioFinalAceitaNomesDigitadosSemIdsEAtualizacaoRemoveVinculosAntigos() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        CriarRelatorioViagemRequest base = requestFinalValido();
+        CriarRelatorioViagemRequest request = new CriarRelatorioViagemRequest(
+                null, null, base.motoristaId(), base.manobristaId(), base.curraleiroId(),
+                base.cavaloId(), base.carretaId(), base.placaCavalo(), base.placaCarreta(),
+                base.numeroGta(), base.numeroNotaFiscal(), base.dataEmbarque(), base.horarioEmbarque(),
+                base.horarioSaidaPropriedade(), base.kmSaidaEmbarcadouro(), base.dataChegadaUnidade(),
+                base.horarioChegadaUnidade(), base.horarioDesembarque(), base.kmChegadaDesembarcadouro(),
+                base.numeroCurral(), base.sireneReFuncionou(), base.quantidadeMachos(), base.quantidadeFemeas(),
+                base.quantidadeMarrucos(), base.quantidadeEmPe(), base.quantidadeDeitado(),
+                base.quantidadeMorto(), base.quantidadeEmergencia(), base.motivoEmergencia(),
+                base.comentarios(), base.urlAssinaturaPecuarista(), base.urlAssinaturaMotorista(),
+                base.urlAssinaturaManobrista(), base.urlAssinaturaCurraleiro(),
+                base.capacidadeCargaUtilizada(), base.urlLaudoMortalidade(), base.status(),
+                base.paradasImprevistas(), base.anomaliasEmbarque(), base.anomaliasDesembarque(),
+                "Fazenda digitada", "Unidade digitada");
+        service.validarCoerenciaDiarioRota(request, true);
+
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setStatus("rascunho");
+        entity.setUrlAssinaturaPecuarista("pec");
+        entity.setUrlAssinaturaMotorista("mot");
+        entity.setUrlAssinaturaManobrista("man");
+        entity.setUrlAssinaturaCurraleiro("cur");
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+        var response = service.atualizar(1, request, null, UUID.randomUUID());
+        assertNull(response.fazendaId());
+        assertNull(response.unidadeFrigorificaId());
+        assertEquals("Fazenda digitada", response.nomeOrigem());
+        assertEquals("Unidade digitada", response.nomeDestino());
     }
 
     @Test
@@ -797,7 +833,7 @@ class RelatorioViagemServiceTest {
         ValidacaoDiarioRotaException ex = assertThrows(ValidacaoDiarioRotaException.class,
                 () -> service.validarCoerenciaDiarioRota(requestParcial(), true));
 
-        assertTrue(ex.getFieldErrors().containsKey("fazendaId"));
+        assertTrue(ex.getFieldErrors().containsKey("nomeOrigem"));
         assertTrue(ex.getFieldErrors().containsKey("numeroGta"));
         assertTrue(ex.getFieldErrors().containsKey("horarioDesembarque"));
         assertTrue(ex.getFieldErrors().containsKey("quantidadeEmergencia"));

@@ -602,8 +602,8 @@ public class RelatorioViagemService {
 
     private void validarCamposObrigatorios(RelatorioViagemEntity entity) {
         Map<String, String> errors = new LinkedHashMap<>();
-        exigir(entity.getFazendaId() != null, "fazendaId", "A propriedade de origem é obrigatória.", errors);
-        exigir(entity.getUnidadeFrigorificaId() != null, "unidadeFrigorificaId", "A unidade frigorífica de destino é obrigatória.", errors);
+        exigir(entity.getFazendaId() != null || presente(entity.getNomeOrigem()), "nomeOrigem", "Informe a propriedade de origem ou selecione uma fazenda cadastrada.", errors);
+        exigir(entity.getUnidadeFrigorificaId() != null || presente(entity.getNomeDestino()), "nomeDestino", "Informe a unidade de destino ou selecione uma cadastrada.", errors);
         exigir(presente(entity.getNumeroGta()), "numeroGta", "O número da GTA é obrigatório.", errors);
         exigir(presente(entity.getNumeroNotaFiscal()), "numeroNotaFiscal", "O número da nota fiscal é obrigatório.", errors);
         exigir(entity.getDataEmbarque() != null, "dataEmbarque", "A data de embarque é obrigatória.", errors);
@@ -684,8 +684,8 @@ public class RelatorioViagemService {
         int somaCondicao = emPe + deitado + morto + emergencia;
 
         if (isEnvioFinal) {
-            exigir(request.fazendaId() != null, "fazendaId", "A propriedade de origem é obrigatória.", errors);
-            exigir(request.unidadeFrigorificaId() != null, "unidadeFrigorificaId", "A unidade frigorífica de destino é obrigatória.", errors);
+            exigir(request.fazendaId() != null || presente(request.nomeOrigem()), "nomeOrigem", "Informe a propriedade de origem ou selecione uma fazenda cadastrada.", errors);
+            exigir(request.unidadeFrigorificaId() != null || presente(request.nomeDestino()), "nomeDestino", "Informe a unidade de destino ou selecione uma cadastrada.", errors);
             exigir(presente(request.numeroGta()), "numeroGta", "O número da GTA é obrigatório.", errors);
             exigir(presente(request.numeroNotaFiscal()), "numeroNotaFiscal", "O número da nota fiscal é obrigatório.", errors);
             exigir(request.dataEmbarque() != null, "dataEmbarque", "A data de embarque é obrigatória.", errors);
@@ -735,8 +735,14 @@ public class RelatorioViagemService {
     ) {
         if (request.fazendaId() != null) entity.setFazendaId(request.fazendaId());
         if (request.unidadeFrigorificaId() != null) entity.setUnidadeFrigorificaId(request.unidadeFrigorificaId());
-        if (request.nomeOrigem() != null) entity.setNomeOrigem(request.nomeOrigem().trim());
-        if (request.nomeDestino() != null) entity.setNomeDestino(request.nomeDestino().trim());
+        if (request.nomeOrigem() != null) {
+            entity.setNomeOrigem(request.nomeOrigem().trim());
+            if (request.fazendaId() == null) entity.setFazendaId(null);
+        }
+        if (request.nomeDestino() != null) {
+            entity.setNomeDestino(request.nomeDestino().trim());
+            if (request.unidadeFrigorificaId() == null) entity.setUnidadeFrigorificaId(null);
+        }
         if (motoristaIdResolvido != null) entity.setMotoristaId(motoristaIdResolvido);
         if (empresaIdResolvido != null) entity.setEmpresaId(empresaIdResolvido);
         if (request.manobristaId() != null) entity.setManobristaId(request.manobristaId());
