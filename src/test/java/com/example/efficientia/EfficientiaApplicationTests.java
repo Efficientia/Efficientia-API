@@ -45,6 +45,16 @@ class EfficientiaApplicationTests {
 				.andExpect(jsonPath("$.paths['/api/v1/documentos/{id}'].patch.responses['409']").exists());
 	}
 
+	@Test
+	void devePublicarContratoAtualDoDiarioComLocaisDigitadosERetomada() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.components.schemas.CriarRelatorioViagemRequest.properties.nomeOrigem").exists())
+				.andExpect(jsonPath("$.components.schemas.CriarRelatorioViagemRequest.properties.nomeDestino").exists())
+				.andExpect(jsonPath("$.paths['/api/v1/relatorios-viagem/me'].get").exists())
+				.andExpect(jsonPath("$.paths['/api/v1/locais-diario/fazendas'].get").exists());
+	}
+
 	@TestConfiguration(proxyBeanMethods = false)
 	static class TestDependencies {
 

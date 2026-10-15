@@ -49,10 +49,10 @@ jobs:
           skipped = int(suite.attrib.get("skipped", "0"))
           errors = int(suite.attrib.get("errors", "0"))
           failures = int(suite.attrib.get("failures", "0"))
-          if tests != 1 or skipped or errors or failures:
+          if tests != 2 or skipped or errors or failures:
               raise SystemExit(
-                  f"Expected one executed PostgreSQL integration test; "
+                  f"Expected two executed PostgreSQL integration tests; "
                   f"got tests={tests}, skipped={skipped}, errors={errors}, failures={failures}"
               )
-          print("PostgreSQL integration test ran successfully (1 test, 0 skipped).")
+          print("PostgreSQL integration tests ran successfully (2 tests, 0 skipped).")
           PY

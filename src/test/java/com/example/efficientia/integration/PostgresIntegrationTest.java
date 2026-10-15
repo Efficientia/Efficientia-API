@@ -51,6 +51,52 @@ class PostgresIntegrationTest {
     private ExportacaoRepository exportacaoRepository;
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
+    void deveAplicarV15EAceitarRascunhoParcialComLocaisDigitadosNoPostgres() {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT success FROM flyway_schema_history WHERE version = '15'", Boolean.class)).isTrue();
+        List<String> camposDasEtapas = List.of(
+                "fazenda_id", "manobrista_id", "curraleiro_id", "cavalo_id", "carreta_id",
+                "numero_gta", "numero_nota_fiscal", "data_embarque", "horario_embarque",
+                "horario_saida_propriedade", "km_saida_embarcadouro", "data_chegada_unidade",
+                "horario_chegada_unidade", "horario_desembarque", "km_chegada_desembarcadouro",
+                "numero_curral", "sirene_re_funcionou", "qtd_machos", "qtd_femeas", "qtd_marrucos",
+                "qtd_em_pe", "qtd_deitado", "qtd_morto", "qtd_emergencia",
+                "url_assinatura_pecuarista", "url_assinatura_motorista", "url_assinatura_manobrista",
+                "url_assinatura_curraleiro");
+        for (String campo : camposDasEtapas) {
+            assertThat(jdbcTemplate.queryForObject("""
+                    SELECT is_nullable FROM information_schema.columns
+                    WHERE table_schema = 'sc_operacao' AND table_name = 'tb_relatorio_viagem'
+                      AND column_name = ?
+                    """, String.class, campo)).as("nulabilidade de %s após V15", campo).isEqualTo("YES");
+        }
+
+        jdbcTemplate.update("""
+                INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash)
+                VALUES (18, 'motorista', '12345678918', 'Motorista rascunho', 'hash')
+                ON CONFLICT DO NOTHING
+                """);
+        Integer id = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem
+                    (motorista_id, status, numero_gta, numero_nota_fiscal, nome_origem, nome_destino)
+                VALUES (18, 'rascunho', '6767a', '56767', 'Fazenda Do Osmar', 'Fazenda Do Noé')
+                RETURNING id
+                """, Integer.class);
+        assertThat(id).isNotNull();
+        assertThat(jdbcTemplate.queryForMap("""
+                SELECT status, fazenda_id, unidade_frigorifica_id, data_chegada_unidade,
+                       nome_origem, nome_destino
+                FROM sc_operacao.tb_relatorio_viagem WHERE id = ?
+                """, id)).containsEntry("status", "rascunho")
+                .containsEntry("fazenda_id", null)
+                .containsEntry("unidade_frigorifica_id", null)
+                .containsEntry("data_chegada_unidade", null)
+                .containsEntry("nome_origem", "Fazenda Do Osmar")
+                .containsEntry("nome_destino", "Fazenda Do Noé");
+    }
+
+    @Test
     void deveExecutarMigracoesEVersaoNoPostgresReal() {
         assertThat(postgres.isRunning()).isTrue();
 
