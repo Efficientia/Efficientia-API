@@ -29,7 +29,7 @@ public class OutboxRelayService {
     private String streamKey;
 
     public OutboxRelayService(
-            OutboxEventoRepository repository,
+            @Autowired(required = false) OutboxEventoRepository repository,
             @Autowired(required = false) StringRedisTemplate redisTemplate) {
         this.repository = repository;
         this.redisTemplate = redisTemplate;
@@ -37,6 +37,10 @@ public class OutboxRelayService {
 
     @Transactional
     public int processarEventosPendentes(int limite) {
+        if (repository == null) {
+            log.warn("OutboxEventoRepository não configurado. Nenhum evento outbox a processar.");
+            return 0;
+        }
         int limiteEfetivo = (limite > 0) ? limite : 50;
         List<OutboxEventoEntity> pendentes = repository.findTop50ByProcessadoEmIsNullOrderByCriadoEmAsc();
 
@@ -73,6 +77,9 @@ public class OutboxRelayService {
     }
 
     public long contarPendentes() {
+        if (repository == null) {
+            return 0;
+        }
         return repository.countByProcessadoEmIsNull();
     }
 

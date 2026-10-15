@@ -118,6 +118,11 @@ class EfficientiaApplicationTests {
 		com.example.efficientia.documento.storage.StorageService storageService() {
 			return Mockito.mock(com.example.efficientia.documento.storage.StorageService.class);
 		}
+
+		@Bean
+		com.example.efficientia.outbox.persistence.OutboxEventoRepository outboxEventoRepository() {
+			return Mockito.mock(com.example.efficientia.outbox.persistence.OutboxEventoRepository.class);
+		}
 	}
 
 }
