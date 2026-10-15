@@ -92,6 +92,8 @@ public class SecurityConfig {
                         .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR")
                         .requestMatchers("/api/v1/usuarios/**", "/api/v1/enderecos/**", "/api/v1/fazendas/**", "/api/v1/veiculos/**", "/api/v1/caminhoes/**")
                         .hasAnyRole("MOTORISTA", "MANOBRISTA", "ANALISTA", "PECUARISTA", "CURRALEIRO", "FUNCIONARIO_FRIBOI", "ADMIN", "ADMINISTRADOR")
+                        .requestMatchers("/api/v1/outbox/**")
+                        .hasAnyRole("ANALISTA", "ADMIN", "ADMINISTRADOR")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
                         jwt.jwtAuthenticationConverter(new JwtRoleConverter())))

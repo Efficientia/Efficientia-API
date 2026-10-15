@@ -97,6 +97,24 @@ class PostgresIntegrationTest {
     }
 
     @Test
+    @org.springframework.transaction.annotation.Transactional
+    void deveAplicarV16ECriarOutboxNoPostgresReal() {
+        assertThat(postgres.isRunning()).isTrue();
+
+        Integer count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'sc_operacao' AND table_name = 'tb_outbox_evento'",
+                Integer.class
+        );
+        assertThat(count).isEqualTo(1);
+
+        Integer indexCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'sc_operacao' AND indexname = 'idx_outbox_pendentes'",
+                Integer.class
+        );
+        assertThat(indexCount).isEqualTo(1);
+    }
+
+    @Test
     void deveExecutarMigracoesEVersaoNoPostgresReal() {
         assertThat(postgres.isRunning()).isTrue();
 
