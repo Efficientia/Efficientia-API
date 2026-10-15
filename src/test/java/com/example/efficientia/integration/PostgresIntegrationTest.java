@@ -96,27 +96,22 @@ class PostgresIntegrationTest {
                 .containsEntry("nome_destino", "Fazenda Do Noé");
     }
 
-    @Test
-    @org.springframework.transaction.annotation.Transactional
-    void deveAplicarV16ECriarOutboxNoPostgresReal() {
-        assertThat(postgres.isRunning()).isTrue();
 
-        Integer count = jdbcTemplate.queryForObject(
+    @Test
+    void deveExecutarMigracoesEVersaoNoPostgresReal() {
+        assertThat(postgres.isRunning()).isTrue();
+        Integer outboxTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'sc_operacao' AND table_name = 'tb_outbox_evento'",
                 Integer.class
         );
-        assertThat(count).isEqualTo(1);
+        assertThat(outboxTableCount).isEqualTo(1);
 
         Integer indexCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'sc_operacao' AND indexname = 'idx_outbox_pendentes'",
                 Integer.class
         );
         assertThat(indexCount).isEqualTo(1);
-    }
 
-    @Test
-    void deveExecutarMigracoesEVersaoNoPostgresReal() {
-        assertThat(postgres.isRunning()).isTrue();
 
         jdbcTemplate.execute("INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash) VALUES (10, 'motorista', '12345678901', 'Motorista Teste', 'hash') ON CONFLICT DO NOTHING");
         jdbcTemplate.execute("INSERT INTO sc_frota.tb_veiculo_cavalo (id, placa) VALUES (10, 'ABC1234') ON CONFLICT DO NOTHING");

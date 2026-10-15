@@ -23,8 +23,8 @@ public class ProcedimentosOperacionaisService {
     private static final Logger log = LoggerFactory.getLogger(ProcedimentosOperacionaisService.class);
 
     private final JdbcTemplate jdbcTemplate;
-
-    public ProcedimentosOperacionaisService(JdbcTemplate jdbcTemplate) {
+    public ProcedimentosOperacionaisService(
+            @org.springframework.beans.factory.annotation.Autowired(required = false) JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -42,6 +42,10 @@ public class ProcedimentosOperacionaisService {
             throw new IllegalArgumentException("relatorioId e analistaId são obrigatórios para aprovar relatório via procedure.");
         }
 
+        if (jdbcTemplate == null) {
+            log.warn("JdbcTemplate não configurado. Ignorando execução de sc_operacao.sp_aprovar_relatorio.");
+            return false;
+        }
         try {
             log.info("Invocando procedure sc_operacao.sp_aprovar_relatorio para relatorioId: {}, analistaId: {}",
                     relatorioId, analistaId);
@@ -77,6 +81,10 @@ public class ProcedimentosOperacionaisService {
 
         int quantidade = (quantidadeAnimais != null && quantidadeAnimais > 0) ? quantidadeAnimais : 1;
 
+        if (jdbcTemplate == null) {
+            log.warn("JdbcTemplate não configurado. Ignorando execução de sc_operacao.sp_registrar_anomalia.");
+            return false;
+        }
         try {
             log.info("Invocando procedure sc_operacao.sp_registrar_anomalia para relatorioId: {}, etapa: {}, codigo: {}, qtd: {}",
                     relatorioId, tipoEtapa, codigoAnomalia, quantidade);
