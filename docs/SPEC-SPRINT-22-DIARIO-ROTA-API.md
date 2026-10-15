@@ -86,7 +86,7 @@ Atualiza os campos recebidos e mantém os valores omitidos, permitindo retomar o
 
 O `rascunho` aceita etapas parciais e valida os campos enviados sem exigir campos futuros. Ao retomar o diário, é possível corrigir uma etapa anterior antes de ajustar os valores dependentes de uma etapa posterior; a coerência global será exigida na submissão. Para a primeira transição a `pendente`, o estado resultante deve conter o formulário completo e é obrigatório enviar `Idempotency-Key`. Se as etapas anteriores já foram salvas, o PUT final pode conter apenas `status: "pendente"` com a chave.
 
-Um diário `pendente` com chave vinculada aceita edição parcial sem reenviar o header e preserva sua chave e data de envio. Um `pendente` legado sem chave exige o header para a primeira edição; a chave será vinculada ao mesmo ID. Uma chave diferente da vinculada ou usada por outro relatório é rejeitada. Erros retornam `400` com `fieldErrors` e não persistem a etapa rejeitada. O mobile só deve marcar a etapa como sincronizada após resposta de sucesso.
+Um diário `pendente` com chave vinculada aceita edição parcial sem reenviar o header e preserva sua chave e data de envio. Um `pendente` legado sem chave exige o header para a primeira edição; a chave será vinculada ao mesmo ID. Uma chave diferente da vinculada ou usada por outro relatório é rejeitada. Erros de campos/coerência retornam `400` com `fieldErrors`; assinaturas incompletas retornam `422` com `papeisFaltantes`. A etapa rejeitada não é persistida. O mobile só deve marcar a etapa como sincronizada após resposta de sucesso.
 
 ### Consulta
 
