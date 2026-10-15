@@ -34,6 +34,7 @@ import com.example.efficientia.relatorioviagem.persistence.ParadaImprevistaRepos
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemEntity;
 import com.example.efficientia.relatorioviagem.persistence.RelatorioViagemRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.BeanUtils;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -209,8 +210,6 @@ public class RelatorioViagemService {
             }
         }
 
-        validarCoerenciaDiarioRota(request, isEnvioFinal);
-
         if (request.numeroGta() != null && !request.numeroGta().isBlank()) {
             String gtaTrim = request.numeroGta().trim();
             if (!gtaTrim.equalsIgnoreCase(entity.getNumeroGta()) && repository.existsByNumeroGta(gtaTrim)) {
@@ -235,10 +234,18 @@ public class RelatorioViagemService {
             }
         }
 
-        popularDadosEntidade(entity, request, motoristaIdResolvido, empresaIdResolvido, idempotencyKey, statusNovo);
+        // PUT accepts step updates: omitted fields keep their previously saved values.
+        // Validate a detached candidate so an invalid step never changes the managed entity.
+        RelatorioViagemEntity candidato = new RelatorioViagemEntity();
+        BeanUtils.copyProperties(entity, candidato);
+        popularDadosEntidade(candidato, request, motoristaIdResolvido, empresaIdResolvido, idempotencyKey, statusNovo);
+        // Draft steps can temporarily invalidate a later step while the driver edits it.
+        // Final submissions and pending edits must validate the complete saved diary.
+        validarCoerenciaDiarioRota(isEnvioFinal ? dadosParaValidacao(candidato) : request, isEnvioFinal);
         if (isEnvioFinal) {
-            validarAssinaturasObrigatorias(entity);
+            validarAssinaturasObrigatorias(candidato);
         }
+        BeanUtils.copyProperties(candidato, entity);
         entity.setAtualizadoEm(LocalDateTime.now());
 
         if (isEnvioFinal && entity.getEnviadoEm() == null) {
@@ -639,6 +646,23 @@ public class RelatorioViagemService {
 
     private int nullAsZero(Integer valor) {
         return valor == null ? 0 : valor;
+    }
+
+    private CriarRelatorioViagemRequest dadosParaValidacao(RelatorioViagemEntity entity) {
+        return new CriarRelatorioViagemRequest(
+                entity.getFazendaId(), entity.getUnidadeFrigorificaId(), entity.getMotoristaId(),
+                entity.getManobristaId(), entity.getCurraleiroId(), entity.getCavaloId(), entity.getCarretaId(),
+                null, null, entity.getNumeroGta(), entity.getNumeroNotaFiscal(), entity.getDataEmbarque(),
+                entity.getHorarioEmbarque(), entity.getHorarioSaidaPropriedade(), entity.getKmSaidaEmbarcadouro(),
+                entity.getDataChegadaUnidade(), entity.getHorarioChegadaUnidade(), entity.getHorarioDesembarque(),
+                entity.getKmChegadaDesembarcadouro(), entity.getNumeroCurral(), entity.getSireneReFuncionou(),
+                entity.getQuantidadeMachos(), entity.getQuantidadeFemeas(), entity.getQuantidadeMarrucos(),
+                entity.getQuantidadeEmPe(), entity.getQuantidadeDeitado(), entity.getQuantidadeMorto(),
+                entity.getQuantidadeEmergencia(), entity.getMotivoEmergencia(), entity.getComentarios(),
+                entity.getUrlAssinaturaPecuarista(), entity.getUrlAssinaturaMotorista(),
+                entity.getUrlAssinaturaManobrista(), entity.getUrlAssinaturaCurraleiro(),
+                entity.getCapacidadeCargaUtilizada(), entity.getUrlLaudoMortalidade(), entity.getStatus(),
+                null, null, null, entity.getNomeOrigem(), entity.getNomeDestino());
     }
 
     public void validarCoerenciaDiarioRota(CriarRelatorioViagemRequest request, boolean isEnvioFinal) {

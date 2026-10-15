@@ -52,11 +52,14 @@ Os usuários do sistema possuem papéis mapeados a partir de `TipoUsuario`:
 - **Exemplo de Resposta (200 OK):**
 ```json
 {
-  "nome": "efficientia",
+  "service": "efficientia",
   "status": "UP",
-  "versao": "1.0.0"
+  "version": "1.0.0",
+  "commit": "unknown"
 }
 ```
+
+O campo `commit` contém o SHA disponibilizado pelo Render em `RENDER_GIT_COMMIT`. Fora desse ambiente, retorna `unknown`. O status confirma qual artefato está em execução, mas a aplicação da migration deve ser conferida nos logs do Flyway e no histórico do banco.
 
 #### `GET /actuator/health`
 - **O que faz:** Endpoint de verificação de saúde do Spring Actuator (status da conexão com banco Supabase, storage privado, disk space, etc.).
@@ -245,8 +248,10 @@ A imagem é persistida em `sc_corporativo.tb_usuario` pela migration V14. O app 
 - **Resposta (201 Created):** Retorna o relatório completo, incluindo status, metadados, totais, duração/distância calculadas, assinaturas e listas persistidas.
 
 #### `PUT /api/v1/relatorios-viagem/{id}`
-- **O que faz:** Atualiza o diário e permite retomar um rascunho entre as etapas do app. Os campos omitidos preservam os valores já salvos; listas de ocorrências são substituídas quando enviadas.
-- **Headers:** Submissão final exige `Idempotency-Key` se o relatório ainda não tiver uma chave.
+- **O que faz:** Atualiza o diário e permite retomar um rascunho entre as etapas do app. Os campos omitidos preservam os valores já salvos; listas de ocorrências são substituídas quando enviadas. A validação de submissão e de edição de `pendente` considera o estado resultante (dados salvos mais dados enviados). Em `rascunho`, a validação considera a etapa enviada, sem exigir etapas futuras: uma correção em etapa anterior pode ser salva antes de ajustar os valores dependentes de uma etapa posterior.
+- **Headers:** A primeira submissão final exige `Idempotency-Key` se o relatório ainda não tiver uma chave. Um `pendente` com chave vinculada aceita edição parcial sem reenviar o header; sua chave e a data de envio são preservadas. Um `pendente` legado sem chave continua exigindo o header. Uma chave diferente da vinculada ou usada em outro relatório é rejeitada.
+- **Submissão após as etapas:** Quando os dados obrigatórios e assinaturas já estiverem salvos, o PUT final pode enviar apenas `{"status":"pendente"}` com a chave. Os dados resultantes devem estar completos e coerentes.
+- **Falha de validação:** Retorna `400` com `fieldErrors`; a atualização rejeitada não altera dados, status ou chave. O mobile deve avançar/sincronizar a etapa somente após a resposta de sucesso.
 
 #### Validação e erros do diário
 - **Resposta de validação (400):** `ProblemDetail` com `fieldErrors`, um mapa estável de campo para mensagem. Inclui incoerência cronológica, quilometragem, contagens e status.

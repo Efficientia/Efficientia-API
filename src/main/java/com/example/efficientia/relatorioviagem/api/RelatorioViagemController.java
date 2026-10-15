@@ -91,7 +91,11 @@ public class RelatorioViagemController {
     }
 
     @Operation(summary = "Atualizar relatório de viagem completo (retomada de rascunho em etapas)",
-            description = "Permite atualizar todas as etapas de um diário de rota em andamento (inclusive paradas e anomalias).",
+            description = "Atualiza as etapas preservando os campos omitidos. A validação final considera os dados já salvos. "
+                    + "Rascunhos permitem salvar etapas parciais e corrigir etapas dependentes depois. "
+                    + "A primeira submissão final exige Idempotency-Key; "
+                    + "a edição de pendente com chave já vinculada dispensa reenviar o header. "
+                    + "Um pendente legado sem chave ainda exige Idempotency-Key.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
                     description = "Campos enviados atualizam o rascunho; campos omitidos são preservados.",
                     required = true,

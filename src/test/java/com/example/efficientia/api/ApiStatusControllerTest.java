@@ -15,7 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = {
         "spring.application.name=efficientia",
-        "app.version=test"
+        "app.version=test",
+        "app.commit=d938d17-test"
 })
 class ApiStatusControllerTest {
 
@@ -29,6 +30,7 @@ class ApiStatusControllerTest {
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(jsonPath("$.service").value("efficientia"))
                 .andExpect(jsonPath("$.status").value("UP"))
-                .andExpect(jsonPath("$.version").value("test"));
+                .andExpect(jsonPath("$.version").value("test"))
+                .andExpect(jsonPath("$.commit").value("d938d17-test"));
     }
 }

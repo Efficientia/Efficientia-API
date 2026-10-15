@@ -1036,6 +1036,233 @@ class RelatorioViagemServiceTest {
         assertTrue(ex.getFieldErrors().containsKey("kmChegadaDesembarcadouro"));
     }
 
+    @Test
+    void deveEditarPendenteParcialSemReenviarChaveOuCamposJaSalvos() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        UUID key = UUID.randomUUID();
+        LocalDateTime enviadoEm = LocalDateTime.of(2026, 9, 11, 16, 0);
+        entity.setStatus("pendente");
+        entity.setIdempotencyKey(key);
+        entity.setEnviadoEm(enviadoEm);
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.atualizar(1,
+                requestJson("{\"status\":\"pendente\",\"comentarios\":\"Corrigido na retomada\"}"), null, null);
+
+        assertEquals(1, response.id());
+        assertEquals("pendente", response.status());
+        assertEquals("Corrigido na retomada", response.comentarios());
+        assertEquals("GTA-1", response.numeroGta());
+        assertEquals(LocalTime.of(8, 0), response.horarioEmbarque());
+        assertEquals(18, response.totalAnimais());
+        assertEquals(key, response.idempotencyKey());
+        assertEquals(enviadoEm, response.enviadoEm());
+        assertEquals(4, response.totalAssinaturasColetadas());
+        verify(repository).save(entity);
+    }
+
+    @Test
+    void deveSubmeterMesmoRascunhoComDadosDasEtapasSalvasEAssinaturaDaConta() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        UsuarioRepository usuarios = mock(UsuarioRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository, usuarios, null);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        entity.setUrlAssinaturaMotorista(null);
+        entity.setFazendaId(null);
+        entity.setUnidadeFrigorificaId(null);
+        entity.setNomeOrigem("Fazenda Do Osmar");
+        entity.setNomeDestino("Fazenda Do Noé");
+        UsuarioEntity motorista = new UsuarioEntity();
+        motorista.setUrlAssinaturaGeral("assinatura-da-conta");
+        UUID key = UUID.randomUUID();
+        when(usuarios.findById(3)).thenReturn(java.util.Optional.of(motorista));
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+        Jwt jwt = Jwt.withTokenValue("teste").header("alg", "none").subject("3").build();
+        var auth = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+
+        var response = service.atualizar(1, requestJson("{\"status\":\"pendente\"}"), auth, key);
+
+        assertEquals(1, response.id());
+        assertEquals("pendente", response.status());
+        assertEquals(key, response.idempotencyKey());
+        assertEquals("Fazenda Do Osmar", response.nomeOrigem());
+        assertEquals("Fazenda Do Noé", response.nomeDestino());
+        assertEquals("assinatura-da-conta", response.urlAssinaturaMotorista());
+        assertNotNull(response.enviadoEm());
+        verify(repository).save(entity);
+    }
+
+    @Test
+    void deveExigirChaveNaPrimeiraSubmissaoENaEdicaoDePendenteLegado() throws Exception {
+        for (String statusAnterior : List.of("rascunho", "pendente")) {
+            RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+            RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+            entity.setStatus(statusAnterior);
+            when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+
+            var ex = assertThrows(ValidacaoDiarioRotaException.class,
+                    () -> new RelatorioViagemService(repository).atualizar(1,
+                            requestJson("{\"status\":\"pendente\",\"comentarios\":\"Não salvo\"}"), null, null));
+
+            assertTrue(ex.getFieldErrors().containsKey("Idempotency-Key"));
+            assertEquals(statusAnterior, entity.getStatus());
+            assertNull(entity.getComentarios());
+            assertNull(entity.getIdempotencyKey());
+            verify(repository, never()).save(any());
+        }
+    }
+
+    @Test
+    void deveRecusarEnvioParcialSemAlterarRascunhoOuVincularChave() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemEntity entity = new RelatorioViagemEntity();
+        entity.setId(1);
+        entity.setNomeOrigem("Fazenda Do Osmar");
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+
+        var ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> new RelatorioViagemService(repository).atualizar(1,
+                        requestJson("{\"status\":\"pendente\",\"numeroGta\":\"6767a\"}"), null, UUID.randomUUID()));
+
+        assertTrue(ex.getFieldErrors().containsKey("nomeDestino"));
+        assertTrue(ex.getFieldErrors().containsKey("dataChegadaUnidade"));
+        assertEquals("rascunho", entity.getStatus());
+        assertNull(entity.getNumeroGta());
+        assertNull(entity.getIdempotencyKey());
+        assertNull(entity.getEnviadoEm());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deveRecusarEdicaoPendenteSemAssinaturasSemAlterarDadosSalvos() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setStatus("pendente");
+        entity.setIdempotencyKey(UUID.randomUUID());
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+
+        assertThrows(com.example.efficientia.relatorioviagem.api.AssinaturasIncompletasException.class,
+                () -> new RelatorioViagemService(repository).atualizar(1,
+                        requestJson("{\"comentarios\":\"Não salvo\"}"), null, null));
+
+        assertNull(entity.getComentarios());
+        assertNull(entity.getAtualizadoEm());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deveValidarQuilometragemDaEdicaoPendenteContraSaidaJaSalva() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        entity.setStatus("pendente");
+        entity.setIdempotencyKey(UUID.randomUUID());
+        entity.setKmSaidaEmbarcadouro(67);
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> service.atualizar(1, requestJson("{\"kmChegadaDesembarcadouro\":66}"), null, null));
+        assertTrue(ex.getFieldErrors().containsKey("kmChegadaDesembarcadouro"));
+        assertEquals(200, entity.getKmChegadaDesembarcadouro());
+        verify(repository, never()).save(any());
+
+        var response = service.atualizar(1, requestJson("{\"kmChegadaDesembarcadouro\":167}"), null, null);
+        assertEquals(67, response.kmSaidaEmbarcadouro());
+        assertEquals(167, response.kmChegadaDesembarcadouro());
+        assertEquals("pendente", response.status());
+    }
+
+    @Test
+    void deveValidarDataEHorarioDaEdicaoPendenteContraSaidaJaSalva() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        entity.setStatus("pendente");
+        entity.setIdempotencyKey(UUID.randomUUID());
+        entity.setDataEmbarque(LocalDate.of(2026, 9, 11));
+        entity.setHorarioEmbarque(LocalTime.of(8, 44));
+        entity.setHorarioSaidaPropriedade(LocalTime.of(10, 12));
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        var chegadaAnterior = requestComTempos(requestParcial(), null, null, null,
+                LocalDate.of(2026, 9, 11), LocalTime.of(10, 0), null, null, null);
+
+        var ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> service.atualizar(1, chegadaAnterior, null, null));
+
+        assertTrue(ex.getFieldErrors().containsKey("horarioChegadaUnidade"));
+        assertEquals(LocalDate.of(2026, 8, 20), entity.getDataChegadaUnidade());
+        assertEquals(LocalTime.of(12, 0), entity.getHorarioChegadaUnidade());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deveValidarCondicoesDaEdicaoPendenteContraTotalJaSalvo() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        entity.setStatus("pendente");
+        entity.setIdempotencyKey(UUID.randomUUID());
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+
+        var ex = assertThrows(ValidacaoDiarioRotaException.class,
+                () -> new RelatorioViagemService(repository).atualizar(1,
+                        requestJson("{\"quantidadeEmPe\":19}"), null, null));
+
+        assertTrue(ex.getFieldErrors().containsKey("condicaoAnimais"));
+        assertEquals(18, entity.getQuantidadeEmPe());
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void devePermitirEditarEtapasAnterioresDoRascunhoECorrigirEtapasSeguintesDepois() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = relatorioCompletoComAssinaturas();
+        entity.setQuantidadeMachos(10);
+        entity.setQuantidadeFemeas(0);
+        entity.setQuantidadeEmPe(10);
+        when(repository.findById(1)).thenReturn(java.util.Optional.of(entity));
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(i -> i.getArgument(0));
+
+        var categoriaCorrigida = service.atualizar(1, requestJson("{\"quantidadeMachos\":9}"), null, null);
+        assertEquals("rascunho", categoriaCorrigida.status());
+        assertEquals(9, categoriaCorrigida.quantidadeMachos());
+        assertEquals(10, categoriaCorrigida.quantidadeEmPe());
+        var condicaoCorrigida = service.atualizar(1, requestJson("{\"quantidadeEmPe\":9}"), null, null);
+        assertEquals(9, condicaoCorrigida.quantidadeEmPe());
+
+        var novaSaida = requestComTempos(requestParcial(), null, null, LocalTime.of(13, 0),
+                null, null, null, null, null);
+        var saidaCorrigida = service.atualizar(1, novaSaida, null, null);
+        assertEquals(LocalTime.of(13, 0), saidaCorrigida.horarioSaidaPropriedade());
+        assertEquals(LocalTime.of(12, 0), saidaCorrigida.horarioChegadaUnidade());
+        var novaChegada = requestComTempos(requestParcial(), null, null, null,
+                LocalDate.of(2026, 8, 20), LocalTime.of(13, 30), LocalTime.of(14, 0), null, null);
+        var chegadaCorrigida = service.atualizar(1, novaChegada, null, null);
+        assertEquals(LocalTime.of(13, 30), chegadaCorrigida.horarioChegadaUnidade());
+        assertEquals(LocalTime.of(14, 0), chegadaCorrigida.horarioDesembarque());
+        assertEquals("rascunho", chegadaCorrigida.status());
+        assertEquals(1, chegadaCorrigida.id());
+        verify(repository, org.mockito.Mockito.times(4)).save(entity);
+    }
+
+    private CriarRelatorioViagemRequest requestJson(String json) throws Exception {
+        return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, CriarRelatorioViagemRequest.class);
+    }
+
+    private RelatorioViagemEntity relatorioCompletoComAssinaturas() {
+        RelatorioViagemEntity entity = relatorioCompleto();
+        entity.setUrlAssinaturaPecuarista("pecuarista");
+        entity.setUrlAssinaturaMotorista("motorista");
+        entity.setUrlAssinaturaManobrista("manobrista");
+        entity.setUrlAssinaturaCurraleiro("curraleiro");
+        return entity;
+    }
+
     private CriarRelatorioViagemRequest requestComGta(CriarRelatorioViagemRequest base, String gta) {
         return new CriarRelatorioViagemRequest(
                 base.fazendaId(), base.unidadeFrigorificaId(), base.motoristaId(), base.manobristaId(),
