@@ -59,7 +59,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api/v1/status",
-                                "/api/v1/auth/**"
+                                "/api/v1/auth/**",
+                                "/api/v1/temp/**"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/v1/empresas/*/adms",
