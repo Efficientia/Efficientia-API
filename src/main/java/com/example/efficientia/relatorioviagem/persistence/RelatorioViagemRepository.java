@@ -16,6 +16,8 @@ public interface RelatorioViagemRepository extends JpaRepository<RelatorioViagem
 
     List<RelatorioViagemEntity> findByMotoristaId(Integer motoristaId);
     Page<RelatorioViagemEntity> findByMotoristaId(Integer motoristaId, Pageable pageable);
+    Page<RelatorioViagemEntity> findByMotoristaIdAndStatusNot(Integer motoristaId, String status, Pageable pageable);
+    Page<RelatorioViagemEntity> findByStatusNot(String status, Pageable pageable);
 
     List<RelatorioViagemEntity> findByCavaloId(Integer cavaloId);
 

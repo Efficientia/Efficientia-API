@@ -339,7 +339,7 @@ class RelatorioViagemServiceTest {
     void deveValidarPaginacaoEBusca() {
         RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
         RelatorioViagemService service = new RelatorioViagemService(repository);
-        when(repository.findAll(any(org.springframework.data.domain.Pageable.class)))
+        when(repository.findByStatusNot(eq("excluido"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(relatorioCompleto()), PageRequest.of(0, 10), 1));
 
         assertEquals(1, service.listar(0, 10).itens().size());
@@ -360,11 +360,56 @@ class RelatorioViagemServiceTest {
                 List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
         RelatorioViagemEntity proprio = relatorioCompleto();
         proprio.setMotoristaId(17);
-        when(repository.findByMotoristaId(eq(17), any(org.springframework.data.domain.Pageable.class)))
+        when(repository.findByMotoristaIdAndStatusNot(eq(17), eq("excluido"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(proprio)));
 
         assertEquals(1, service.listar(0, 20, auth).itens().size());
         verify(repository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void deveExcluirSomenteRascunhoDoMotoristaAutenticado() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity draft = new RelatorioViagemEntity();
+        draft.setId(42);
+        draft.setMotoristaId(17);
+        draft.setNumeroGta("GTA-42");
+        when(repository.findById(42)).thenReturn(java.util.Optional.of(draft));
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+                .claim("usuario_id", 17).build();
+        var auth = new JwtAuthenticationToken(jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+
+        service.excluirRascunho(42, auth);
+
+        assertEquals("excluido", draft.getStatus());
+        assertNull(draft.getNumeroGta());
+        verify(repository).save(draft);
+        assertThrows(com.example.efficientia.relatorioviagem.api.RelatorioViagemNotFoundException.class,
+                () -> service.buscar(42, auth));
+    }
+
+    @Test
+    void naoDeveExcluirRascunhoDeOutroMotoristaNemRelatorioEnviado() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity draft = new RelatorioViagemEntity();
+        draft.setId(42);
+        draft.setMotoristaId(18);
+        when(repository.findById(42)).thenReturn(java.util.Optional.of(draft));
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+                .claim("usuario_id", 17).build();
+        var auth = new JwtAuthenticationToken(jwt,
+                List.of(new SimpleGrantedAuthority("ROLE_MOTORISTA")));
+
+        assertThrows(com.example.efficientia.relatorioviagem.api.RelatorioViagemNotFoundException.class,
+                () -> service.excluirRascunho(42, auth));
+        draft.setMotoristaId(17);
+        draft.setStatus("pendente");
+        assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> service.excluirRascunho(42, auth));
+        verify(repository, never()).save(any(RelatorioViagemEntity.class));
     }
 
     @Test

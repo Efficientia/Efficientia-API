@@ -268,6 +268,11 @@ A imagem é persistida em `sc_corporativo.tb_usuario` pela migration V14. O app 
 #### `GET /api/v1/relatorios-viagem/{id}`
 - **O que faz:** Retorna os detalhes completos de um relatório específico pelo seu ID numérico.
 
+#### `DELETE /api/v1/relatorios-viagem/{id}`
+- **O que faz:** Exclui logicamente um `rascunho` pertencente ao motorista autenticado. O rascunho deixa de aparecer nas listagens e seu GET/PUT passa a retornar `404`. O número da GTA é liberado para um novo relatório; documentos vinculados são preservados para auditoria.
+- **Headers:** `Authorization: Bearer <token>`.
+- **Respostas:** `204` após a exclusão; `401` sem identificação no JWT; `404` para ID ausente ou pertencente a outro motorista; `409` se o relatório já foi enviado ou finalizado.
+
 #### `GET /api/v1/relatorios-viagem/{id}/caminhao`
 - **O que faz:** Retorna os detalhes do caminhão (cavalo mecânico e carreta/boiadeira) alocado no relatório de viagem, incluindo identificação do motorista responsável e status de uso.
 - **Resposta (200 OK):** Objeto `CaminhaoRelatorioResponse`.
