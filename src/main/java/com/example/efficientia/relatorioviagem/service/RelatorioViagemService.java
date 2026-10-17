@@ -182,6 +182,9 @@ public class RelatorioViagemService {
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
 
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) {
+            throw new RelatorioViagemNotFoundException(id);
+        }
         if ("aprovado".equalsIgnoreCase(entity.getStatus())) {
             throw new IllegalArgumentException("Relatórios de viagem já aprovados e finalizados não podem ser alterados.");
         }
@@ -268,7 +271,7 @@ public class RelatorioViagemService {
                 Sort.by(Sort.Order.desc("dataEmbarque"), Sort.Order.desc("id"))
         );
         return RelatorioViagemPageResponse.from(
-                repository.findAll(pageable).map(this::montarResponseCompleta)
+                repository.findByStatusNot("excluido", pageable).map(this::montarResponseCompleta)
         );
     }
 
@@ -289,14 +292,39 @@ public class RelatorioViagemService {
                 org.springframework.http.HttpStatus.UNAUTHORIZED, "JWT sem identificação de usuário.");
         var pageable = PageRequest.of(pagina, tamanho,
                 Sort.by(Sort.Order.desc("atualizadoEm"), Sort.Order.desc("id")));
-        return RelatorioViagemPageResponse.from(repository.findByMotoristaId(usuarioId, pageable)
+        return RelatorioViagemPageResponse.from(repository.findByMotoristaIdAndStatusNot(usuarioId, "excluido", pageable)
                 .map(this::montarResponseCompleta));
     }
 
     public RelatorioViagemResponse buscar(Integer id) {
         return repository.findById(id)
+                .filter(entity -> !"excluido".equalsIgnoreCase(entity.getStatus()))
                 .map(this::montarResponseCompleta)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+    }
+
+    @Transactional
+    public void excluirRascunho(Integer id, Authentication authentication) {
+        Integer usuarioId = extrairUsuarioId(authentication);
+        if (authentication == null || !authentication.isAuthenticated() || usuarioId == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "JWT sem identificação de usuário.");
+        }
+        RelatorioViagemEntity entity = repository.findById(id)
+                .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+        if (!java.util.Objects.equals(usuarioId, entity.getMotoristaId())
+                || "excluido".equalsIgnoreCase(entity.getStatus())) {
+            throw new RelatorioViagemNotFoundException(id);
+        }
+        if (!"rascunho".equalsIgnoreCase(entity.getStatus())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.CONFLICT,
+                    "Somente rascunhos podem ser excluídos.");
+        }
+        entity.setStatus("excluido");
+        entity.setNumeroGta(null);
+        entity.setAtualizadoEm(LocalDateTime.now());
+        repository.save(entity);
     }
 
     public RelatorioViagemResponse buscar(Integer id, Authentication authentication) {
@@ -329,6 +357,7 @@ public class RelatorioViagemService {
         }
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) throw new RelatorioViagemNotFoundException(id);
 
         if (request.urlAssinaturaPecuarista() != null && !request.urlAssinaturaPecuarista().isBlank()) {
             entity.setUrlAssinaturaPecuarista(request.urlAssinaturaPecuarista().trim());
@@ -360,6 +389,7 @@ public class RelatorioViagemService {
         }
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) throw new RelatorioViagemNotFoundException(id);
 
         String papelNorm = papel.trim().toUpperCase();
         String url = (urlAssinatura != null && !urlAssinatura.isBlank()) ? urlAssinatura.trim() : null;
@@ -405,6 +435,7 @@ public class RelatorioViagemService {
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
 
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) throw new RelatorioViagemNotFoundException(id);
         if ("aprovado".equalsIgnoreCase(entity.getStatus()) || "concluido".equalsIgnoreCase(entity.getStatus())) {
             throw new ValidacaoDiarioRotaException("Relatório já finalizado.",
                     Map.of("status", "Não é permitido alterar assinaturas de um relatório já finalizado."));
@@ -475,6 +506,7 @@ public class RelatorioViagemService {
         String papelNorm = papel.trim().toUpperCase(Locale.ROOT);
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) throw new RelatorioViagemNotFoundException(id);
 
         String url = switch (papelNorm) {
             case "PECUARISTA" -> entity.getUrlAssinaturaPecuarista();
@@ -544,6 +576,7 @@ public class RelatorioViagemService {
         }
         RelatorioViagemEntity entity = repository.findById(id)
                 .orElseThrow(() -> new RelatorioViagemNotFoundException(id));
+        if ("excluido".equalsIgnoreCase(entity.getStatus())) throw new RelatorioViagemNotFoundException(id);
 
         String statusNorm = novoStatus.trim().toLowerCase();
         validarStatus(statusNorm);

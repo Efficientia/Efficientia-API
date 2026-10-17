@@ -28,6 +28,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -149,6 +150,21 @@ public class RelatorioViagemController {
     @GetMapping("/{id}")
     public RelatorioViagemResponse buscar(@PathVariable Integer id, Authentication authentication) {
         return service.buscar(id, authentication);
+    }
+
+    @Operation(summary = "Excluir rascunho do motorista autenticado",
+            description = "Remove o rascunho da listagem, preservando documentos para auditoria. "
+                    + "Relatórios enviados ou finalizados não podem ser excluídos por este endpoint.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Rascunho excluído"),
+            @ApiResponse(responseCode = "401", description = "Não autenticado"),
+            @ApiResponse(responseCode = "404", description = "Rascunho não encontrado ou não pertence ao motorista"),
+            @ApiResponse(responseCode = "409", description = "Relatório não é um rascunho")
+    })
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluirRascunho(@PathVariable Integer id, Authentication authentication) {
+        service.excluirRascunho(id, authentication);
     }
 
     @Operation(summary = "Buscar caminhão vinculado ao relatório")

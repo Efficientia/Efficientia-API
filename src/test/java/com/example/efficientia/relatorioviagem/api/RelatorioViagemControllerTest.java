@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -71,6 +72,13 @@ class RelatorioViagemControllerTest {
                 .andExpect(jsonPath("$.relatorioId").value(1))
                 .andExpect(jsonPath("$.placaCavalo").value("ABC1D23"))
                 .andExpect(jsonPath("$.placaCarreta").value("XYZ9W87"));
+    }
+
+    @Test
+    void deveExcluirRascunho() throws Exception {
+        mockMvc.perform(delete("/api/v1/relatorios-viagem/42"))
+                .andExpect(status().isNoContent());
+        verify(service).excluirRascunho(eq(42), nullable(org.springframework.security.core.Authentication.class));
     }
 
     @Test
