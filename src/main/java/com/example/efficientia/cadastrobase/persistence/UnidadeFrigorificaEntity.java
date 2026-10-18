@@ -8,7 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "tb_unidade_frigorifica", schema = "sc_corporativo")
+// O diário usa IDs INTEGER da tabela transacional da API. A tabela
+// sc_corporativo.tb_unidade_frigorifica pertence ao catálogo UUID externo.
+@Table(name = "unidade_frigorifica", schema = "public")
 public class UnidadeFrigorificaEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -1,9 +1,12 @@
 package com.example.efficientia.relatorioviagem.api;
 
 import com.example.efficientia.cadastrobase.persistence.EnderecoRepository;
+import com.example.efficientia.cadastrobase.persistence.EnderecoEntity;
 import com.example.efficientia.cadastrobase.persistence.FazendaEntity;
 import com.example.efficientia.cadastrobase.persistence.FazendaRepository;
+import com.example.efficientia.cadastrobase.persistence.UnidadeFrigorificaEntity;
 import com.example.efficientia.cadastrobase.persistence.UnidadeFrigorificaRepository;
+import jakarta.persistence.Table;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
@@ -19,6 +22,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class LocaisDiarioControllerTest {
+    @Test
+    void locaisDoDiarioUsamTabelasDeIdsInteirosDaApi() {
+        assertTable(EnderecoEntity.class, "endereco");
+        assertTable(FazendaEntity.class, "fazenda");
+        assertTable(UnidadeFrigorificaEntity.class, "unidade_frigorifica");
+    }
+
+    private static void assertTable(Class<?> entityType, String expectedName) {
+        Table table = entityType.getAnnotation(Table.class);
+        assertEquals("public", table.schema());
+        assertEquals(expectedName, table.name());
+    }
+
     @Test
     void buscaFazendasPorNomeComPaginacaoEId() {
         FazendaRepository fazendas = mock(FazendaRepository.class);

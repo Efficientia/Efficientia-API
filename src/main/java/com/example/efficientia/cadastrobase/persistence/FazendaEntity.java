@@ -8,7 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "tb_fazenda", schema = "sc_corporativo")
+// O diário referencia os IDs INTEGER da tabela de compatibilidade da API.
+@Table(name = "fazenda", schema = "public")
 public class FazendaEntity {
 
     @Id

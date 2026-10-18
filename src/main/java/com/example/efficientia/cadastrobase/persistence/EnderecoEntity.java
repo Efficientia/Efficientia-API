@@ -8,7 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "tb_endereco", schema = "sc_corporativo")
+// Endereços de fazendas e unidades da API usam IDs INTEGER em public.
+@Table(name = "endereco", schema = "public")
 public class EnderecoEntity {
 
     @Id
