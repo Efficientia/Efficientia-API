@@ -100,6 +100,15 @@ class PostgresIntegrationTest {
     @Test
     void deveExecutarMigracoesEVersaoNoPostgresReal() {
         assertThat(postgres.isRunning()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT success FROM flyway_schema_history WHERE version = '17'", Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT data_type FROM information_schema.columns
+                WHERE table_schema = 'sc_corporativo'
+                  AND table_name = 'tb_unidade_frigorifica' AND column_name = 'id'
+                """, String.class)).isEqualTo("integer");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT to_regclass('public.unidade_frigorifica') IS NULL", Boolean.class)).isTrue();
         Integer outboxTableCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'sc_operacao' AND table_name = 'tb_outbox_evento'",
                 Integer.class

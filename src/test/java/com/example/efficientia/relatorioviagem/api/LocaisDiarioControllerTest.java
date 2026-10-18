@@ -24,14 +24,14 @@ import static org.mockito.Mockito.when;
 class LocaisDiarioControllerTest {
     @Test
     void locaisDoDiarioUsamTabelasDeIdsInteirosDaApi() {
-        assertTable(EnderecoEntity.class, "endereco");
-        assertTable(FazendaEntity.class, "fazenda");
-        assertTable(UnidadeFrigorificaEntity.class, "unidade_frigorifica");
+        assertTable(EnderecoEntity.class, "tb_endereco");
+        assertTable(FazendaEntity.class, "tb_fazenda");
+        assertTable(UnidadeFrigorificaEntity.class, "tb_unidade_frigorifica");
     }
 
     private static void assertTable(Class<?> entityType, String expectedName) {
         Table table = entityType.getAnnotation(Table.class);
-        assertEquals("public", table.schema());
+        assertEquals("sc_corporativo", table.schema());
         assertEquals(expectedName, table.name());
     }
 
