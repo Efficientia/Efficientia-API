@@ -167,6 +167,33 @@ class RelatorioViagemControllerTest {
     }
 
     @Test
+    void deveAceitarJsonDaPrimeiraEtapaDoMobileComoRascunho() throws Exception {
+        when(service.criar(any(CriarRelatorioViagemRequest.class),
+                nullable(org.springframework.security.core.Authentication.class), isNull()))
+                .thenReturn(respostaRelatorio());
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem")
+                        .contentType(APPLICATION_JSON)
+                        .content("""
+                                {"status":"rascunho","nomeOrigem":"Fazenda Do Osmar",
+                                 "nomeDestino":"Fazenda Do Noé","numeroGta":"6767a",
+                                 "numeroNotaFiscal":"56767","dataEmbarque":"2026-09-11",
+                                 "horarioEmbarque":"08:44:00","horarioSaidaPropriedade":"10:12:00",
+                                 "kmSaidaEmbarcadouro":67,"paradasImprevistas":[],
+                                 "anomaliasEmbarque":[]}
+                                """))
+                .andExpect(status().isCreated());
+
+        var request = org.mockito.ArgumentCaptor.forClass(CriarRelatorioViagemRequest.class);
+        verify(service).criar(request.capture(),
+                nullable(org.springframework.security.core.Authentication.class), isNull());
+        org.junit.jupiter.api.Assertions.assertEquals("rascunho", request.getValue().status());
+        org.junit.jupiter.api.Assertions.assertEquals("Fazenda Do Osmar", request.getValue().nomeOrigem());
+        org.junit.jupiter.api.Assertions.assertEquals(java.time.LocalTime.of(8, 44),
+                request.getValue().horarioEmbarque());
+    }
+
+    @Test
     void deveRetornar400ComErrosDeCampoQuandoRequestForInvalido() throws Exception {
         mockMvc.perform(post("/api/v1/relatorios-viagem")
                         .contentType(APPLICATION_JSON)

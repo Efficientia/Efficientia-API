@@ -445,6 +445,51 @@ class RelatorioViagemServiceTest {
     }
 
     @Test
+    void rascunhoDaPrimeiraEtapaMobileAceitaLocaisDigitadosEAvancoParcial() throws Exception {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        var primeiraEtapa = mapper.readValue("""
+                {"status":"rascunho","nomeOrigem":"Fazenda Do Osmar",
+                 "nomeDestino":"Fazenda Do Noé","numeroGta":"6767a",
+                 "numeroNotaFiscal":"56767","dataEmbarque":"2026-09-11",
+                 "horarioEmbarque":"08:44:00","horarioSaidaPropriedade":"10:12:00",
+                 "kmSaidaEmbarcadouro":67,"paradasImprevistas":[],
+                 "anomaliasEmbarque":[]}
+                """, CriarRelatorioViagemRequest.class);
+        when(repository.save(any(RelatorioViagemEntity.class))).thenAnswer(invocation -> {
+            RelatorioViagemEntity saved = invocation.getArgument(0);
+            saved.setId(42);
+            return saved;
+        });
+
+        var criado = service.criar(primeiraEtapa);
+
+        assertEquals(42, criado.id());
+        assertEquals("rascunho", criado.status());
+        assertEquals("Fazenda Do Osmar", criado.nomeOrigem());
+        assertEquals("Fazenda Do Noé", criado.nomeDestino());
+        assertNull(criado.fazendaId());
+        assertNull(criado.unidadeFrigorificaId());
+
+        var salvo = org.mockito.ArgumentCaptor.forClass(RelatorioViagemEntity.class);
+        verify(repository).save(salvo.capture());
+        when(repository.findById(42)).thenReturn(java.util.Optional.of(salvo.getValue()));
+        var proximaEtapa = mapper.readValue("""
+                {"status":"rascunho","nomeOrigem":"Fazenda Do Osmar",
+                 "nomeDestino":"Fazenda Do Noé","numeroGta":"6767a",
+                 "numeroNotaFiscal":"56767","dataEmbarque":"2026-09-11",
+                 "horarioEmbarque":"08:44:00","horarioSaidaPropriedade":"10:12:00",
+                 "kmSaidaEmbarcadouro":67,"quantidadeMachos":12,
+                 "paradasImprevistas":[],"anomaliasEmbarque":[]}
+                """, CriarRelatorioViagemRequest.class);
+
+        var atualizado = service.atualizar(42, proximaEtapa, null, null);
+        assertEquals("rascunho", atualizado.status());
+        assertEquals(12, atualizado.quantidadeMachos());
+    }
+
+    @Test
     void envioFinalAceitaNomesDigitadosSemIdsEAtualizacaoRemoveVinculosAntigos() {
         RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
         RelatorioViagemService service = new RelatorioViagemService(repository);
