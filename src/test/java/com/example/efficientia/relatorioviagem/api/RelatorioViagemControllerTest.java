@@ -49,7 +49,9 @@ class RelatorioViagemControllerTest {
 
     @Test
     void deveListarRelatoriosComPaginacao() throws Exception {
-        when(service.listar(eq(0), eq(20), nullable(org.springframework.security.core.Authentication.class)))
+        when(service.listar(eq(0), eq(20),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                nullable(org.springframework.security.core.Authentication.class)))
                 .thenReturn(new RelatorioViagemPageResponse(List.of(), 0, 20, 0, 0));
 
         mockMvc.perform(get("/api/v1/relatorios-viagem"))

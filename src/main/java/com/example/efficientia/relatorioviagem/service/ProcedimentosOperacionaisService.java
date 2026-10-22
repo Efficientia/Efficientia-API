@@ -93,7 +93,7 @@ public class ProcedimentosOperacionaisService {
             log.info("Procedure sc_operacao.sp_registrar_anomalia executada com sucesso para relatorioId: {}", relatorioId);
             return true;
         } catch (BadSqlGrammarException ex) {
-            log.warn("Procedure sc_operacao.sp_registrar_anomalia não encontrada ou incompatível no schema atual (ambiente de testes/H2?). Detalhes: {}",
+            log.warn("Procedure sc_operacao.sp_registrar_anomalia não encontrada ou incompatível no schema atual. Detalhes: {}",
                     ex.getMessage());
             return false;
         } catch (DataAccessException ex) {
