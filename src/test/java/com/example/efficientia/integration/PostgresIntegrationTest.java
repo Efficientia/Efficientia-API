@@ -192,19 +192,27 @@ class PostgresIntegrationTest {
     @org.springframework.transaction.annotation.Transactional
     void buscaDeRelatoriosCombinaStatusGtaEExcluiRelatoriosRemovidos() {
         String busca = "SRCH-" + UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash)
+                VALUES
+                    (21, 'motorista', '12345678921', 'Motorista busca P', 'hash'),
+                    (22, 'motorista', '12345678922', 'Motorista busca A', 'hash'),
+                    (23, 'motorista', '12345678923', 'Motorista busca X', 'hash')
+                ON CONFLICT DO NOTHING
+                """);
         Integer pendenteId = jdbcTemplate.queryForObject("""
-                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
-                VALUES ('pendente', ?)
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (21, 'pendente', ?)
                 RETURNING id
                 """, Integer.class, "GTA-" + busca + "-P");
         Integer aprovadoId = jdbcTemplate.queryForObject("""
-                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
-                VALUES ('aprovado', ?)
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (22, 'aprovado', ?)
                 RETURNING id
                 """, Integer.class, "GTA-" + busca + "-A");
         Integer excluidoId = jdbcTemplate.queryForObject("""
-                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
-                VALUES ('excluido', ?)
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (23, 'excluido', ?)
                 RETURNING id
                 """, Integer.class, "GTA-" + busca + "-X");
 
