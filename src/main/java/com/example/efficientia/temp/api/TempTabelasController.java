@@ -51,8 +51,10 @@ public class TempTabelasController {
             @Parameter(description = "Nome da coluna para ordenação")
             @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
             @Parameter(description = "Direção da ordenação (asc ou desc)")
-            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao) {
-        return ResponseEntity.ok(queryService.obterDadosTabela(tabela, limite, offset, ordenarPor, direcao));
+            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao,
+            @Parameter(description = "Termo de busca / filtro textual em qualquer coluna")
+            @RequestParam(name = "q", required = false) String q) {
+        return ResponseEntity.ok(queryService.obterDadosTabela(tabela, limite, offset, ordenarPor, direcao, q));
     }
 
     @Operation(summary = "Obter todas as tabelas consolidadas", description = "Retorna um único JSON contendo registros de todas as tabelas do sistema.")
@@ -219,5 +221,49 @@ public class TempTabelasController {
             @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
             @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao) {
         return ResponseEntity.ok(queryService.obterDadosTabela("outbox-eventos", limite, offset, ordenarPor, direcao));
+    }
+
+    @Operation(summary = "Dados de Auditorias e Laudos Técnicos", description = "Retorna registros de auditoria_analise.")
+    @GetMapping("/auditorias-analise")
+    public ResponseEntity<TabelaDadosResponse> auditoriasAnalise(
+            @RequestParam(name = "limite", required = false, defaultValue = "100") Integer limite,
+            @RequestParam(name = "offset", required = false, defaultValue = "0") Integer offset,
+            @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
+            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao,
+            @RequestParam(name = "q", required = false) String q) {
+        return ResponseEntity.ok(queryService.obterDadosTabela("auditorias-analise", limite, offset, ordenarPor, direcao, q));
+    }
+
+    @Operation(summary = "Dados do Catálogo de Governança", description = "Retorna registros da tabela catalogo_dados.")
+    @GetMapping("/catalogo-dados")
+    public ResponseEntity<TabelaDadosResponse> catalogoDados(
+            @RequestParam(name = "limite", required = false, defaultValue = "100") Integer limite,
+            @RequestParam(name = "offset", required = false, defaultValue = "0") Integer offset,
+            @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
+            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao,
+            @RequestParam(name = "q", required = false) String q) {
+        return ResponseEntity.ok(queryService.obterDadosTabela("catalogo-dados", limite, offset, ordenarPor, direcao, q));
+    }
+
+    @Operation(summary = "Métricas de Acesso Diário (DAU)", description = "Retorna registros de monitoramento_dau.")
+    @GetMapping("/monitoramento-dau")
+    public ResponseEntity<TabelaDadosResponse> monitoramentoDau(
+            @RequestParam(name = "limite", required = false, defaultValue = "100") Integer limite,
+            @RequestParam(name = "offset", required = false, defaultValue = "0") Integer offset,
+            @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
+            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao,
+            @RequestParam(name = "q", required = false) String q) {
+        return ResponseEntity.ok(queryService.obterDadosTabela("monitoramento-dau", limite, offset, ordenarPor, direcao, q));
+    }
+
+    @Operation(summary = "Camada Fato BI: Transporte Animal", description = "Retorna registros agregados da view analítica vw_fato_transporte_animal.")
+    @GetMapping("/bi/fato-transporte")
+    public ResponseEntity<TabelaDadosResponse> biFatoTransporte(
+            @RequestParam(name = "limite", required = false, defaultValue = "100") Integer limite,
+            @RequestParam(name = "offset", required = false, defaultValue = "0") Integer offset,
+            @RequestParam(name = "ordenarPor", required = false) String ordenarPor,
+            @RequestParam(name = "direcao", required = false, defaultValue = "asc") String direcao,
+            @RequestParam(name = "q", required = false) String q) {
+        return ResponseEntity.ok(queryService.obterDadosTabela("vw-fato-transporte-animal", limite, offset, ordenarPor, direcao, q));
     }
 }

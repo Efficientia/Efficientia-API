@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -84,20 +85,44 @@ public class TempTabelasQueryService {
             new TabelaDef("empresa_admin", "public", "empresas-admin",
                     List.of("empresas-admin", "empresa_admin", "empresa-admin", "public.empresa_admin", "tb_empresa_admin")),
             new TabelaDef("configuracao_operacao", "public", "configuracoes-operacao",
-                    List.of("configuracoes-operacao", "configuracao_operacao", "configuracao-operacao", "public.configuracao_operacao", "tb_configuracao_operacao"))
+                    List.of("configuracoes-operacao", "configuracao_operacao", "configuracao-operacao", "public.configuracao_operacao", "tb_configuracao_operacao")),
+            new TabelaDef("tb_auditoria_analise", "sc_operacao", "auditorias-analise",
+                    List.of("auditorias-analise", "auditoria_analise", "auditoria-analise", "auditorias", "laudos", "sc_operacao.tb_auditoria_analise")),
+            new TabelaDef("tb_catalogo_dados", "sc_auditoria", "catalogo-dados",
+                    List.of("catalogo-dados", "catalogo_dados", "catalogo", "metadados", "sc_auditoria.tb_catalogo_dados")),
+            new TabelaDef("tb_monitoramento_dau", "sc_auditoria", "monitoramento-dau",
+                    List.of("monitoramento-dau", "monitoramento_dau", "dau", "metricas-dau", "sc_auditoria.tb_monitoramento_dau")),
+            new TabelaDef("tb_auditoria_log", "sc_auditoria", "auditoria-log",
+                    List.of("auditoria-log", "auditoria_log", "logs-auditoria", "sc_auditoria.tb_auditoria_log")),
+            new TabelaDef("tb_dominio_motivo_parada", "sc_operacao", "dominios-parada",
+                    List.of("dominios-parada", "dominio-motivo-parada", "dominio_parada", "sc_operacao.tb_dominio_motivo_parada")),
+            new TabelaDef("tb_dominio_anomalia", "sc_operacao", "dominios-anomalia",
+                    List.of("dominios-anomalia", "dominio-anomalia", "dominio_anomalia", "sc_operacao.tb_dominio_anomalia")),
+            new TabelaDef("tb_veiculo_base", "sc_frota", "veiculos-base",
+                    List.of("veiculos-base", "veiculo_base", "frota-base", "sc_frota.tb_veiculo_base")),
+            new TabelaDef("vw_dim_empresa", "sc_corporativo", "vw-dim-empresa",
+                    List.of("vw-dim-empresa", "dim_empresa", "dim-empresa", "sc_corporativo.vw_dim_empresa")),
+            new TabelaDef("vw_dim_colaborador", "sc_corporativo", "vw-dim-colaborador",
+                    List.of("vw-dim-colaborador", "dim_colaborador", "dim-colaborador", "sc_corporativo.vw_dim_colaborador")),
+            new TabelaDef("vw_dim_frota", "sc_frota", "vw-dim-frota",
+                    List.of("vw-dim-frota", "dim_frota", "dim-frota", "sc_frota.vw_dim_frota")),
+            new TabelaDef("vw_dim_localidade", "sc_corporativo", "vw-dim-localidade",
+                    List.of("vw-dim-localidade", "dim_localidade", "dim-localidade", "sc_corporativo.vw_dim_localidade")),
+            new TabelaDef("vw_fato_transporte_animal", "sc_operacao", "vw-fato-transporte-animal",
+                    List.of("vw-fato-transporte-animal", "fato_transporte_animal", "fato-transporte", "sc_operacao.vw_fato_transporte_animal"))
     );
 
     private static final Map<String, TabelaDef> ALIAS_MAP = new HashMap<>();
 
     static {
         for (TabelaDef def : CATALOGO) {
-            ALIAS_MAP.put(def.aliasPrincipal().toLowerCase(), def);
-            ALIAS_MAP.put(def.nome().toLowerCase(), def);
+            ALIAS_MAP.put(def.aliasPrincipal().toLowerCase(Locale.ROOT), def);
+            ALIAS_MAP.put(def.nome().toLowerCase(Locale.ROOT), def);
             if (def.schema() != null) {
-                ALIAS_MAP.put((def.schema() + "." + def.nome()).toLowerCase(), def);
+                ALIAS_MAP.put((def.schema() + "." + def.nome()).toLowerCase(Locale.ROOT), def);
             }
             for (String alias : def.aliases()) {
-                ALIAS_MAP.put(alias.toLowerCase(), def);
+                ALIAS_MAP.put(alias.toLowerCase(Locale.ROOT), def);
             }
         }
     }
@@ -146,12 +171,16 @@ public class TempTabelasQueryService {
     }
 
     public TabelaDadosResponse obterDadosTabela(String nomeOuAlias, Integer limite, Integer offset, String ordenarPor, String direcao) {
+        return obterDadosTabela(nomeOuAlias, limite, offset, ordenarPor, direcao, null);
+    }
+
+    public TabelaDadosResponse obterDadosTabela(String nomeOuAlias, Integer limite, Integer offset, String ordenarPor, String direcao, String busca) {
         if (nomeOuAlias == null || nomeOuAlias.isBlank()) {
             throw new IllegalArgumentException("Nome ou alias de tabela não informado");
         }
 
         String trimmed = nomeOuAlias.trim();
-        String normalized = trimmed.toLowerCase();
+        String normalized = trimmed.toLowerCase(Locale.ROOT);
         TabelaDef def = ALIAS_MAP.get(normalized);
 
         if (def == null) {
@@ -187,7 +216,42 @@ public class TempTabelasQueryService {
             );
         }
 
+        List<String> colunasDisponiveis = extrairColunas(resolved.qualifiedSqlName());
+        StringBuilder whereClause = new StringBuilder();
+        List<Object> queryParams = new ArrayList<>();
+        long totalRegistros = resolved.count();
+
+        if (busca != null && !busca.isBlank() && !colunasDisponiveis.isEmpty() && jdbcTemplate != null) {
+            String termoBusca = "%" + busca.trim().toLowerCase(Locale.ROOT) + "%";
+            whereClause.append(" WHERE (");
+            boolean first = true;
+            for (String col : colunasDisponiveis) {
+                if (COLUMN_NAME_PATTERN.matcher(col).matches()) {
+                    if (!first) whereClause.append(" OR ");
+                    whereClause.append("LOWER(CAST(").append(col).append(" AS TEXT)) LIKE ?");
+                    queryParams.add(termoBusca);
+                    first = false;
+                }
+            }
+            whereClause.append(")");
+
+            try {
+                Long countFiltrado = jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM " + resolved.qualifiedSqlName() + whereClause,
+                        Long.class,
+                        queryParams.toArray()
+                );
+                if (countFiltrado != null) {
+                    totalRegistros = countFiltrado;
+                }
+            } catch (Exception ex) {
+                log.trace("Não foi possível contar registros filtrados por busca: {}", ex.getMessage());
+            }
+        }
+
         StringBuilder sql = new StringBuilder("SELECT * FROM ").append(resolved.qualifiedSqlName());
+        sql.append(whereClause);
+
         if (ordenarPor != null && !ordenarPor.isBlank()) {
             String safeCol = ordenarPor.trim();
             if (!COLUMN_NAME_PATTERN.matcher(safeCol).matches()) {
@@ -197,6 +261,8 @@ public class TempTabelasQueryService {
             sql.append(" ORDER BY ").append(safeCol).append(" ").append(safeDir);
         }
         sql.append(" LIMIT ? OFFSET ?");
+        queryParams.add(lim);
+        queryParams.add(off);
 
         List<String> colunas = new ArrayList<>();
         List<Map<String, Object>> dados = null;
@@ -204,8 +270,9 @@ public class TempTabelasQueryService {
         if (jdbcTemplate != null) {
             try {
                 dados = jdbcTemplate.query(sql.toString(), ps -> {
-                    ps.setInt(1, lim);
-                    ps.setInt(2, off);
+                    for (int i = 0; i < queryParams.size(); i++) {
+                        ps.setObject(i + 1, queryParams.get(i));
+                    }
                 }, (ResultSet rs) -> {
                     ResultSetMetaData meta = rs.getMetaData();
                     int colCount = meta.getColumnCount();
@@ -240,7 +307,7 @@ public class TempTabelasQueryService {
         return new TabelaDadosResponse(
                 resolved.tableName(),
                 resolved.schemaName(),
-                resolved.count(),
+                totalRegistros,
                 lim,
                 off,
                 colunas,
@@ -311,7 +378,16 @@ public class TempTabelasQueryService {
                     paradasPorMotivo.put(rs.getString("mot"), rs.getLong("qtd"));
                 });
             } catch (Exception ex) {
-                log.warn("Erro ao agregar paradasPorMotivo: {}", ex.getMessage());
+                try {
+                    String sqlFallback = "SELECT COALESCE(d.descricao, d.codigo, 'indefinido') AS mot, COUNT(*) AS qtd FROM "
+                            + resParadas.qualifiedSqlName() + " p LEFT JOIN sc_operacao.tb_dominio_motivo_parada d ON d.id = p.dominio_parada_id "
+                            + " GROUP BY COALESCE(d.descricao, d.codigo, 'indefinido') ORDER BY qtd DESC";
+                    jdbcTemplate.query(sqlFallback, rs -> {
+                        paradasPorMotivo.put(rs.getString("mot"), rs.getLong("qtd"));
+                    });
+                } catch (Exception ex2) {
+                    log.warn("Erro ao agregar paradasPorMotivo: {}", ex2.getMessage());
+                }
             }
         }
 
@@ -324,7 +400,16 @@ public class TempTabelasQueryService {
                     anomaliasPorTipo.merge(rs.getString("anom"), rs.getLong("qtd"), Long::sum);
                 });
             } catch (Exception ex) {
-                log.warn("Erro ao agregar anomaliasPorTipo (embarque): {}", ex.getMessage());
+                try {
+                    String sqlFallback = "SELECT COALESCE(d.descricao, d.codigo, 'indefinido') AS anom, COUNT(*) AS qtd FROM "
+                            + resEmb.qualifiedSqlName() + " e LEFT JOIN sc_operacao.tb_dominio_anomalia d ON d.id = e.dominio_anomalia_id "
+                            + " GROUP BY COALESCE(d.descricao, d.codigo, 'indefinido')";
+                    jdbcTemplate.query(sqlFallback, rs -> {
+                        anomaliasPorTipo.merge(rs.getString("anom"), rs.getLong("qtd"), Long::sum);
+                    });
+                } catch (Exception ex2) {
+                    log.warn("Erro ao agregar anomaliasPorTipo (embarque): {}", ex2.getMessage());
+                }
             }
         }
         if (resDes != null && jdbcTemplate != null) {
@@ -335,7 +420,16 @@ public class TempTabelasQueryService {
                     anomaliasPorTipo.merge(rs.getString("anom"), rs.getLong("qtd"), Long::sum);
                 });
             } catch (Exception ex) {
-                log.warn("Erro ao agregar anomaliasPorTipo (desembarque): {}", ex.getMessage());
+                try {
+                    String sqlFallback = "SELECT COALESCE(d.descricao, d.codigo, 'indefinido') AS anom, COUNT(*) AS qtd FROM "
+                            + resDes.qualifiedSqlName() + " d_tab LEFT JOIN sc_operacao.tb_dominio_anomalia d ON d.id = d_tab.dominio_anomalia_id "
+                            + " GROUP BY COALESCE(d.descricao, d.codigo, 'indefinido')";
+                    jdbcTemplate.query(sqlFallback, rs -> {
+                        anomaliasPorTipo.merge(rs.getString("anom"), rs.getLong("qtd"), Long::sum);
+                    });
+                } catch (Exception ex2) {
+                    log.warn("Erro ao agregar anomaliasPorTipo (desembarque): {}", ex2.getMessage());
+                }
             }
         }
 
@@ -369,6 +463,20 @@ public class TempTabelasQueryService {
 
         ResolvedTable resOut = resolveByAlias("outbox-eventos");
         totaisGerais.put("totalOutboxEventos", resOut != null ? resOut.count() : 0L);
+        ResolvedTable resAud = resolveByAlias("auditorias-analise");
+        totaisGerais.put("totalAuditoriasAnalise", resAud != null ? resAud.count() : 0L);
+
+        ResolvedTable resDau = resolveByAlias("monitoramento-dau");
+        totaisGerais.put("totalMonitoramentoDau", resDau != null ? resDau.count() : 0L);
+
+        ResolvedTable resCat = resolveByAlias("catalogo-dados");
+        totaisGerais.put("totalCatalogoDados", resCat != null ? resCat.count() : 0L);
+
+        ResolvedTable resLog = resolveByAlias("auditoria-log");
+        totaisGerais.put("totalAuditoriaLog", resLog != null ? resLog.count() : 0L);
+
+        ResolvedTable resFato = resolveByAlias("vw-fato-transporte-animal");
+        totaisGerais.put("totalFatoTransporteAnimal", resFato != null ? resFato.count() : 0L);
 
         return new GraficosResumoResponse(
                 totalViagens,
@@ -385,7 +493,7 @@ public class TempTabelasQueryService {
     }
 
     private ResolvedTable resolveByAlias(String alias) {
-        TabelaDef def = ALIAS_MAP.get(alias.toLowerCase());
+        TabelaDef def = ALIAS_MAP.get(alias.toLowerCase(Locale.ROOT));
         return def != null ? resolveWorkingTable(def) : null;
     }
 
@@ -465,7 +573,7 @@ public class TempTabelasQueryService {
 
     private Object sanitizarValor(String colName, Object val) {
         if (colName != null) {
-            String lower = colName.toLowerCase();
+            String lower = colName.toLowerCase(Locale.ROOT);
             if (lower.contains("senha") || lower.contains("password")) {
                 return "[PROTEGIDO]";
             }

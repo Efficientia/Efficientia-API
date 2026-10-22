@@ -50,6 +50,11 @@ class PostgresIntegrationTest {
     @Autowired
     private ExportacaoRepository exportacaoRepository;
 
+    @Autowired
+    private com.example.efficientia.relatorioviagem.service.RelatorioViagemService relatorioViagemService;
+    @Autowired
+    private com.example.efficientia.temp.service.TempTabelasQueryService tempTabelasQueryService;
+
     @Test
     @org.springframework.transaction.annotation.Transactional
     void deveAplicarV15EAceitarRascunhoParcialComLocaisDigitadosNoPostgres() {
@@ -99,9 +104,11 @@ class PostgresIntegrationTest {
 
     @Test
     void deveExecutarMigracoesEVersaoNoPostgresReal() {
-        assertThat(postgres.isRunning()).isTrue();
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT success FROM flyway_schema_history WHERE version = '17'", Boolean.class)).isTrue();
+                "SELECT success FROM flyway_schema_history WHERE version = '18'", Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'sc_operacao' AND indexname = 'idx_api_relatorio_motorista_status'",
+                Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT data_type FROM information_schema.columns
                 WHERE table_schema = 'sc_corporativo'
@@ -120,6 +127,24 @@ class PostgresIntegrationTest {
                 Integer.class
         );
         assertThat(indexCount).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT data_type FROM information_schema.columns
+                WHERE table_schema = 'sc_auditoria' AND table_name = 'tb_monitoramento_dau'
+                  AND column_name = 'usuario_id'
+                """, String.class)).isEqualTo("uuid");
+        UUID dauUsuarioId = UUID.randomUUID();
+        jdbcTemplate.update("""
+                INSERT INTO sc_auditoria.tb_monitoramento_dau (usuario_id)
+                VALUES (?) ON CONFLICT (usuario_id, data_acesso) DO NOTHING
+                """, dauUsuarioId);
+        jdbcTemplate.update("""
+                INSERT INTO sc_auditoria.tb_monitoramento_dau (usuario_id)
+                VALUES (?) ON CONFLICT (usuario_id, data_acesso) DO NOTHING
+                """, dauUsuarioId);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sc_auditoria.tb_monitoramento_dau WHERE usuario_id = ?",
+                Integer.class, dauUsuarioId)).isEqualTo(1);
+
 
 
         jdbcTemplate.execute("INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash) VALUES (10, 'motorista', '12345678901', 'Motorista Teste', 'hash') ON CONFLICT DO NOTHING");
@@ -161,5 +186,41 @@ class PostgresIntegrationTest {
         assertThat(buscada).isPresent();
         assertThat(buscada.get().getEstado()).isEqualTo(EstadoExportacao.NA_FILA);
         assertThat(buscada.get().getTamanhoOrigemBytes()).isEqualTo(2048L);
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void buscaDeRelatoriosCombinaStatusGtaEExcluiRelatoriosRemovidos() {
+        String busca = "SRCH-" + UUID.randomUUID();
+        Integer pendenteId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
+                VALUES ('pendente', ?)
+                RETURNING id
+                """, Integer.class, "GTA-" + busca + "-P");
+        Integer aprovadoId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
+                VALUES ('aprovado', ?)
+                RETURNING id
+                """, Integer.class, "GTA-" + busca + "-A");
+        Integer excluidoId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (status, numero_gta)
+                VALUES ('excluido', ?)
+                RETURNING id
+                """, Integer.class, "GTA-" + busca + "-X");
+
+        var porStatusEGta = relatorioViagemService.listarComFiltros(0, 20, "PENDENTE", busca);
+        assertThat(porStatusEGta.total()).isEqualTo(1);
+        assertThat(porStatusEGta.itens()).extracting(item -> item.id()).containsExactly(pendenteId);
+
+        var porGta = relatorioViagemService.listarComFiltros(0, 20, null, busca);
+        assertThat(porGta.total()).isEqualTo(2);
+        assertThat(porGta.itens()).extracting(item -> item.id())
+                .containsExactlyInAnyOrder(pendenteId, aprovadoId)
+                .doesNotContain(excluidoId);
+
+        var genericSearch = tempTabelasQueryService.obterDadosTabela(
+                "relatorios-viagem", 20, 0, null, null, busca.toLowerCase(java.util.Locale.ROOT));
+        assertThat(genericSearch.totalRegistros()).isEqualTo(3);
+        assertThat(genericSearch.dados()).hasSize(3);
     }
 }

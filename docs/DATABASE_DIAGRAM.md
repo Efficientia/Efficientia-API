@@ -196,6 +196,15 @@ Paradas imprevistas persistem motivo e início/fim. Anomalias de embarque e dese
 
 `tipo_usuario` permanece um enum PostgreSQL. A migration V10 converte os campos de motivo e anomalia para `VARCHAR(50)` com constraints `CHECK`, alinhando o banco aos atributos `String` do JPA; os tipos enum antigos continuam declarados pela V1, mas não são mais usados por essas colunas.
 
+As migrations V1–V17 da API preservam chaves `INTEGER` no domínio operacional
+e status `VARCHAR`, usados pelas entidades JPA e pelos consumidores atuais. O
+`Efficientia-database` define um modelo canônico mais recente com chaves `UUID`
+e `sc_operacao.ty_status_diario`. A V18 da API cria índices de busca e a tabela
+`sc_auditoria.tb_monitoramento_dau` com a chave UUID esperada por
+`fn_registrar_acesso_diario`, sem converter tabelas ou views. Aplicar o DDL
+canônico diretamente exigiria uma migração coordenada de dados, chaves
+estrangeiras e entidades, não um cast isolado.
+
 ### `tipo_usuario`
 - `motorista`
 - `manobrista`
