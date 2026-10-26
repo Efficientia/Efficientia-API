@@ -17,7 +17,7 @@ import com.example.efficientia.assinaturamotorista.api.AssinaturaMotoristaContra
 import com.example.efficientia.assinaturamotorista.api.AssinaturaNaoEncontradaException;
 import com.example.efficientia.assinaturamotorista.api.AssinaturaTamanhoExcedidoException;
 import com.example.efficientia.documento.service.DocumentoConteudo;
-import jakarta.validation.Valid;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -279,19 +279,32 @@ public class RelatorioViagemController {
         return service.enviarParaAnalise(id, idempotencyKey);
     }
 
-    @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(RelatorioViagemNotFoundException.class)
-    public void relatorioNaoEncontrado() {
+    public ProblemDetail relatorioNaoEncontrado(RelatorioViagemNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Relatório de viagem não encontrado");
+        return problem;
     }
 
-    @ResponseStatus(HttpStatus.CONFLICT)
     @ExceptionHandler(NumeroGtaDuplicadoException.class)
-    public void numeroGtaDuplicado() {
+    public ProblemDetail numeroGtaDuplicado(NumeroGtaDuplicadoException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Número de GTA duplicado");
+        return problem;
     }
 
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
     @ExceptionHandler(IllegalArgumentException.class)
-    public void paginacaoInvalida() {
+    public ProblemDetail argumentoInvalido(IllegalArgumentException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Parâmetro inválido");
+        return problem;
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ProblemDetail dadosInconsistentes(DataIntegrityViolationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Violação de integridade nos dados do relatório.");
+        problem.setTitle("Conflito de integridade relacional");
+        return problem;
     }
 
     @ExceptionHandler(AssinaturasIncompletasException.class)

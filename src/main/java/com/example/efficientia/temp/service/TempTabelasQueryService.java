@@ -26,7 +26,6 @@ public class TempTabelasQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(TempTabelasQueryService.class);
 
-    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z0-9_.]+$");
     private static final Pattern COLUMN_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     public record TabelaDef(
@@ -184,17 +183,7 @@ public class TempTabelasQueryService {
         TabelaDef def = ALIAS_MAP.get(normalized);
 
         if (def == null) {
-            if (!IDENTIFIER_PATTERN.matcher(trimmed).matches()) {
-                throw new IllegalArgumentException("Tabela não permitida ou desconhecida: " + nomeOuAlias);
-            }
-            String schema = null;
-            String nome = trimmed;
-            if (trimmed.contains(".")) {
-                String[] parts = trimmed.split("\\.", 2);
-                schema = parts[0];
-                nome = parts[1];
-            }
-            def = new TabelaDef(nome, schema, trimmed, List.of(trimmed));
+            throw new IllegalArgumentException("Tabela não permitida ou desconhecida: " + nomeOuAlias);
         }
 
         int lim = (limite == null || limite <= 0) ? 1000 : Math.min(limite, 10000);
@@ -256,6 +245,9 @@ public class TempTabelasQueryService {
             String safeCol = ordenarPor.trim();
             if (!COLUMN_NAME_PATTERN.matcher(safeCol).matches()) {
                 throw new IllegalArgumentException("Coluna de ordenação inválida: " + ordenarPor);
+            }
+            if (colunasDisponiveis != null && !colunasDisponiveis.isEmpty() && colunasDisponiveis.stream().noneMatch(c -> c.equalsIgnoreCase(safeCol))) {
+                throw new IllegalArgumentException("Coluna de ordenação não existe na tabela: " + ordenarPor);
             }
             String safeDir = (direcao != null && direcao.trim().equalsIgnoreCase("desc")) ? "DESC" : "ASC";
             sql.append(" ORDER BY ").append(safeCol).append(" ").append(safeDir);

@@ -35,7 +35,6 @@ public class OutboxRelayService {
         this.redisTemplate = redisTemplate;
     }
 
-    @Transactional
     public int processarEventosPendentes(int limite) {
         if (repository == null) {
             log.warn("OutboxEventoRepository não configurado. Nenhum evento outbox a processar.");
