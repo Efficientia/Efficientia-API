@@ -19,6 +19,9 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.UUID;
+import org.springframework.dao.DataIntegrityViolationException;
+import static org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -215,7 +218,26 @@ class RelatorioViagemControllerTest {
         mockMvc.perform(post("/api/v1/relatorios-viagem")
                         .contentType(APPLICATION_JSON)
                         .content("{\"numeroGta\":\"GTA-42\"}"))
-                .andExpect(status().isConflict());
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Número de GTA duplicado"))
+                .andExpect(jsonPath("$.detail").value("Já existe um relatório para o número GTA: GTA-42"))
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void deveRetornar409QuandoOcorrerViolacaoDeIntegridadeRelacional() throws Exception {
+        when(service.criar(any(CriarRelatorioViagemRequest.class), nullable(org.springframework.security.core.Authentication.class), isNull()))
+                .thenThrow(new DataIntegrityViolationException("Violação de chave estrangeira"));
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem")
+                        .contentType(APPLICATION_JSON)
+                        .content("{\"numeroGta\":\"GTA-99\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Conflito de integridade relacional"))
+                .andExpect(jsonPath("$.detail").value("Violação de integridade nos dados do relatório."))
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test
@@ -251,7 +273,11 @@ class RelatorioViagemControllerTest {
                 .thenThrow(new RelatorioViagemNotFoundException(404));
 
         mockMvc.perform(get("/api/v1/relatorios-viagem/404"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Relatório de viagem não encontrado"))
+                .andExpect(jsonPath("$.detail").value("Relatório de viagem não encontrado: 404"))
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
@@ -278,7 +304,11 @@ class RelatorioViagemControllerTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/relatorios-viagem/404")
                         .contentType(APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Relatório de viagem não encontrado"))
+                .andExpect(jsonPath("$.detail").value("Relatório de viagem não encontrado: 404"))
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
@@ -289,7 +319,11 @@ class RelatorioViagemControllerTest {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/relatorios-viagem/42")
                         .contentType(APPLICATION_JSON)
                         .content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
+                .andExpect(jsonPath("$.detail").value("Relatórios aprovados não podem ser alterados."))
+                .andExpect(jsonPath("$.status").value(400));
     }
 
     @Test
@@ -336,8 +370,12 @@ class RelatorioViagemControllerTest {
 
         mockMvc.perform(patch("/api/v1/relatorios-viagem/42/assinaturas")
                         .contentType(APPLICATION_JSON)
-                        .content("null"))
-                .andExpect(status().isBadRequest());
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
+                .andExpect(jsonPath("$.detail").value("Os dados de assinatura não podem ser nulos."))
+                .andExpect(jsonPath("$.status").value(400));
     }
 
 
@@ -417,6 +455,32 @@ class RelatorioViagemControllerTest {
                 "C1", true, 10, 8, 0, 18, 0, 0, 0,
                 null, "comentários", null, null, null, null,
                 java.time.LocalDateTime.of(2026, 10, 7, 8, 0), "rascunho");
+    }
+
+    @Test
+    void deveRetornar400QuandoFormatoAssinaturaForInvalido() throws Exception {
+        when(service.registrarAssinaturaPapel(eq(42), any(), any()))
+                .thenThrow(new com.example.efficientia.assinaturamotorista.api.AssinaturaFormatoInvalidoException("Formato inválido"));
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem/42/assinar-papel")
+                        .param("papel", "MOTORISTA")
+                        .param("urlAssinatura", "https://storage/motorista.png"))
+                .andExpect(status().is(415))
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Formato de Assinatura Inválido"));
+    }
+
+    @Test
+    void deveRetornar400QuandoTamanhoAssinaturaForExcedido() throws Exception {
+        when(service.registrarAssinaturaPapel(eq(42), any(), any()))
+                .thenThrow(new com.example.efficientia.assinaturamotorista.api.AssinaturaTamanhoExcedidoException("Tamanho excedido"));
+
+        mockMvc.perform(post("/api/v1/relatorios-viagem/42/assinar-papel")
+                        .param("papel", "MOTORISTA")
+                        .param("urlAssinatura", "https://storage/motorista.png"))
+                .andExpect(status().is(413))
+                .andExpect(content().contentTypeCompatibleWith(APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Tamanho da Assinatura Excedido"));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

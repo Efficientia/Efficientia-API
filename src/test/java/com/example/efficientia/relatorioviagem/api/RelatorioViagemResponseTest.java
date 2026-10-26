@@ -148,4 +148,34 @@ class RelatorioViagemResponseTest {
         assertThat(comMetadados.capacidadeCargaUtilizada()).isEqualTo(80);
         assertThat(comMetadados.urlLaudoMortalidade()).isEqualTo("s3://laudo.pdf");
     }
+
+    @Test
+    void deveExercitarEntidadesDeParadasEAnomalias() {
+        LocalDateTime agora = LocalDateTime.now();
+        var parada = new com.example.efficientia.relatorioviagem.persistence.ParadaImprevistaEntity(1, "pneu", agora, agora.plusMinutes(30));
+        parada.setId(10);
+        parada.setDescricaoMotivo("pneu furado");
+        assertThat(parada.getId()).isEqualTo(10);
+        assertThat(parada.getRelatorioId()).isEqualTo(1);
+        assertThat(parada.getMotivo()).isEqualTo("pneu");
+        assertThat(parada.getDescricaoMotivo()).isEqualTo("pneu furado");
+        assertThat(parada.getDataHoraInicio()).isEqualTo(agora);
+        assertThat(parada.getDataHoraFim()).isEqualTo(agora.plusMinutes(30));
+
+        var emb = new com.example.efficientia.relatorioviagem.persistence.AnomaliaEmbarqueEntity(1, "machucado", "detalhes", 5);
+        emb.setId(20);
+        assertThat(emb.getId()).isEqualTo(20);
+        assertThat(emb.getRelatorioId()).isEqualTo(1);
+        assertThat(emb.getAnomalia()).isEqualTo("machucado");
+        assertThat(emb.getQuantidadeAnimais()).isEqualTo(5);
+        assertThat(emb.getDescricaoOutros()).isEqualTo("detalhes");
+
+        var des = new com.example.efficientia.relatorioviagem.persistence.AnomaliaDesembarqueEntity(1, "estresse", "detalhes2", 2);
+        des.setId(30);
+        assertThat(des.getId()).isEqualTo(30);
+        assertThat(des.getRelatorioId()).isEqualTo(1);
+        assertThat(des.getAnomalia()).isEqualTo("estresse");
+        assertThat(des.getQuantidadeAnimais()).isEqualTo(2);
+        assertThat(des.getDescricaoOutros()).isEqualTo("detalhes2");
+    }
 }
