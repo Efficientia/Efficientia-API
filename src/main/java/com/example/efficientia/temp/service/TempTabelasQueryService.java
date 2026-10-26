@@ -26,7 +26,6 @@ public class TempTabelasQueryService {
 
     private static final Logger log = LoggerFactory.getLogger(TempTabelasQueryService.class);
 
-    private static final Pattern IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z0-9_.]+$");
     private static final Pattern COLUMN_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     public record TabelaDef(
@@ -81,11 +80,11 @@ public class TempTabelasQueryService {
             new TabelaDef("assinatura_motorista", "public", "assinaturas-motorista",
                     List.of("assinaturas-motorista", "assinatura_motorista", "assinatura-motorista", "public.assinatura_motorista", "tb_assinatura_motorista")),
             new TabelaDef("empresa", "public", "empresas",
-                    List.of("empresas", "empresa", "public.empresa", "tb_empresa")),
+                    List.of("empresas", "empresa", "public.empresa", "tb_empresa", "sc_corporativo.tb_empresa", "sc_corporativo.empresa")),
             new TabelaDef("empresa_admin", "public", "empresas-admin",
-                    List.of("empresas-admin", "empresa_admin", "empresa-admin", "public.empresa_admin", "tb_empresa_admin")),
+                    List.of("empresas-admin", "empresa_admin", "empresa-admin", "public.empresa_admin", "tb_empresa_admin", "sc_corporativo.tb_empresa_admin", "sc_corporativo.empresa_admin")),
             new TabelaDef("configuracao_operacao", "public", "configuracoes-operacao",
-                    List.of("configuracoes-operacao", "configuracao_operacao", "configuracao-operacao", "public.configuracao_operacao", "tb_configuracao_operacao")),
+                    List.of("configuracoes-operacao", "configuracao_operacao", "configuracao-operacao", "public.configuracao_operacao", "tb_configuracao_operacao", "sc_corporativo.tb_configuracao_operacao", "sc_corporativo.configuracao_operacao")),
             new TabelaDef("tb_auditoria_analise", "sc_operacao", "auditorias-analise",
                     List.of("auditorias-analise", "auditoria_analise", "auditoria-analise", "auditorias", "laudos", "sc_operacao.tb_auditoria_analise")),
             new TabelaDef("tb_catalogo_dados", "sc_auditoria", "catalogo-dados",
@@ -184,17 +183,7 @@ public class TempTabelasQueryService {
         TabelaDef def = ALIAS_MAP.get(normalized);
 
         if (def == null) {
-            if (!IDENTIFIER_PATTERN.matcher(trimmed).matches()) {
-                throw new IllegalArgumentException("Tabela não permitida ou desconhecida: " + nomeOuAlias);
-            }
-            String schema = null;
-            String nome = trimmed;
-            if (trimmed.contains(".")) {
-                String[] parts = trimmed.split("\\.", 2);
-                schema = parts[0];
-                nome = parts[1];
-            }
-            def = new TabelaDef(nome, schema, trimmed, List.of(trimmed));
+            throw new IllegalArgumentException("Tabela não permitida ou desconhecida: " + nomeOuAlias);
         }
 
         int lim = (limite == null || limite <= 0) ? 1000 : Math.min(limite, 10000);
@@ -256,6 +245,9 @@ public class TempTabelasQueryService {
             String safeCol = ordenarPor.trim();
             if (!COLUMN_NAME_PATTERN.matcher(safeCol).matches()) {
                 throw new IllegalArgumentException("Coluna de ordenação inválida: " + ordenarPor);
+            }
+            if (colunasDisponiveis != null && !colunasDisponiveis.isEmpty() && colunasDisponiveis.stream().noneMatch(c -> c.equalsIgnoreCase(safeCol))) {
+                throw new IllegalArgumentException("Coluna de ordenação não existe na tabela: " + ordenarPor);
             }
             String safeDir = (direcao != null && direcao.trim().equalsIgnoreCase("desc")) ? "DESC" : "ASC";
             sql.append(" ORDER BY ").append(safeCol).append(" ").append(safeDir);
@@ -546,6 +538,17 @@ public class TempTabelasQueryService {
             }
             candidates.add(new CandidateInfo("public." + comTb, comTb, "public"));
             candidates.add(new CandidateInfo(comTb, comTb, "public"));
+        }
+
+        if ("empresa".equalsIgnoreCase(nome) || "tb_empresa".equalsIgnoreCase(nome)) {
+            candidates.add(new CandidateInfo("sc_corporativo.tb_empresa", "tb_empresa", "sc_corporativo"));
+            candidates.add(new CandidateInfo("sc_corporativo.empresa", "empresa", "sc_corporativo"));
+        } else if ("configuracao_operacao".equalsIgnoreCase(nome) || "tb_configuracao_operacao".equalsIgnoreCase(nome)) {
+            candidates.add(new CandidateInfo("sc_corporativo.tb_configuracao_operacao", "tb_configuracao_operacao", "sc_corporativo"));
+            candidates.add(new CandidateInfo("sc_corporativo.configuracao_operacao", "configuracao_operacao", "sc_corporativo"));
+        } else if ("empresa_admin".equalsIgnoreCase(nome) || "tb_empresa_admin".equalsIgnoreCase(nome)) {
+            candidates.add(new CandidateInfo("sc_corporativo.tb_empresa_admin", "tb_empresa_admin", "sc_corporativo"));
+            candidates.add(new CandidateInfo("sc_corporativo.empresa_admin", "empresa_admin", "sc_corporativo"));
         }
 
         return candidates;

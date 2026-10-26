@@ -2,6 +2,7 @@ package com.example.efficientia.config;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,11 +54,21 @@ public final class DotenvPropertyLoader {
             }
 
             String value = stripMatchingQuotes(line.substring(separator + 1).strip());
-            if ("SUPABASE_DB_URL".equals(key)) {
-                value = normalizePostgresUrl(value);
+            if (value.isBlank()) {
+                continue;
+            }
+            if ("SUPABASE_DB_URL".equals(key) || "DATABASE_URL".equals(key)) {
+                value = normalizePostgresUrl(key, value, properties);
             }
 
             properties.put(key, value);
+        }
+
+        if (properties.containsKey("DATABASE_URL") && !properties.containsKey("SUPABASE_DB_URL")) {
+            properties.put("SUPABASE_DB_URL", properties.get("DATABASE_URL"));
+        }
+        if (properties.containsKey("SUPABASE_DB_USER") && !properties.containsKey("SUPABASE_DB_USERNAME")) {
+            properties.put("SUPABASE_DB_USERNAME", properties.get("SUPABASE_DB_USER"));
         }
 
         return properties;
@@ -76,8 +87,11 @@ public final class DotenvPropertyLoader {
         return value;
     }
 
-    private static String normalizePostgresUrl(String value) {
-        String uriValue = value.startsWith("jdbc:") ? value.substring("jdbc:".length()) : value;
+    private static String normalizePostgresUrl(String key, String value, Map<String, Object> properties) {
+        if (value.startsWith("jdbc:")) {
+            return value;
+        }
+        String uriValue = value;
         if (!uriValue.startsWith("postgresql://")) {
             return value;
         }
@@ -86,11 +100,29 @@ public final class DotenvPropertyLoader {
         try {
             uri = URI.create(uriValue);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("SUPABASE_DB_URL possui um formato inválido.", exception);
+            throw new IllegalArgumentException(key + " possui um formato inválido.", exception);
         }
 
         if (uri.getHost() == null) {
-            throw new IllegalArgumentException("SUPABASE_DB_URL deve informar um host válido.");
+            throw new IllegalArgumentException(key + " deve informar um host válido.");
+        }
+
+        String userInfo = uri.getUserInfo();
+        if (userInfo != null && !userInfo.isBlank()) {
+            int colon = userInfo.indexOf(':');
+            String user = colon >= 0 ? userInfo.substring(0, colon) : userInfo;
+            String pass = colon >= 0 ? userInfo.substring(colon + 1) : "";
+            try {
+                user = URLDecoder.decode(user, StandardCharsets.UTF_8);
+                pass = URLDecoder.decode(pass, StandardCharsets.UTF_8);
+            } catch (Exception ignored) {
+            }
+            if (!user.isBlank() && !properties.containsKey("SUPABASE_DB_USERNAME")) {
+                properties.put("SUPABASE_DB_USERNAME", user);
+            }
+            if (!pass.isBlank() && !properties.containsKey("SUPABASE_DB_PASSWORD")) {
+                properties.put("SUPABASE_DB_PASSWORD", pass);
+            }
         }
 
         String host = uri.getHost().contains(":") ? "[" + uri.getHost() + "]" : uri.getHost();

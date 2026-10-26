@@ -1611,4 +1611,37 @@ class RelatorioViagemServiceTest {
         assertEquals("image/png", conteudo.mimeType());
         assertEquals(pngBytes.length, conteudo.tamanhoBytes());
     }
+
+    @Test
+    void deveListarComFiltrosDeStatusEGta() {
+        RelatorioViagemRepository repository = mock(RelatorioViagemRepository.class);
+        RelatorioViagemService service = new RelatorioViagemService(repository);
+        RelatorioViagemEntity entity = new RelatorioViagemEntity();
+        entity.setId(10);
+        entity.setStatus("aprovado");
+        entity.setNumeroGta("GTA-99");
+
+        org.springframework.data.domain.Page<RelatorioViagemEntity> page = new org.springframework.data.domain.PageImpl<>(
+                List.of(entity), org.springframework.data.domain.PageRequest.of(0, 10), 1
+        );
+        when(repository.findByStatusAndNumeroGtaContainingIgnoreCaseAndStatusNot(eq("aprovado"), eq("GTA-99"), eq("excluido"), any()))
+                .thenReturn(page);
+        when(repository.findByStatusAndStatusNot(eq("aprovado"), eq("excluido"), any()))
+                .thenReturn(page);
+        when(repository.findByNumeroGtaContainingIgnoreCaseAndStatusNot(eq("GTA-99"), eq("excluido"), any()))
+                .thenReturn(page);
+        when(repository.findByStatusNot(eq("excluido"), any()))
+                .thenReturn(page);
+
+        var r1 = service.listarComFiltros(0, 10, "aprovado", "GTA-99");
+        var r2 = service.listarComFiltros(0, 10, "aprovado", null);
+        var r3 = service.listarComFiltros(0, 10, null, "GTA-99");
+        var r4 = service.listarComFiltros(0, 10, null, null);
+
+        assertNotNull(r1);
+        assertEquals(1, r1.total());
+        assertNotNull(r2);
+        assertNotNull(r3);
+        assertNotNull(r4);
+    }
 }
