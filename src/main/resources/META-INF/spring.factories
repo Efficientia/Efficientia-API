@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=com.example.efficientia.config.DatabaseUrlEnvironmentPostProcessor
+org.springframework.boot.env.EnvironmentPostProcessor=com.example.efficientia.config.DatabaseUrlEnvironmentPostProcessor
