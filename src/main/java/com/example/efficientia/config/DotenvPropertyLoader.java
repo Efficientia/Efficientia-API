@@ -53,11 +53,18 @@ public final class DotenvPropertyLoader {
             }
 
             String value = stripMatchingQuotes(line.substring(separator + 1).strip());
-            if ("SUPABASE_DB_URL".equals(key)) {
-                value = normalizePostgresUrl(value);
+            if ("SUPABASE_DB_URL".equals(key) || "DATABASE_URL".equals(key)) {
+                value = normalizePostgresUrl(key, value);
             }
 
             properties.put(key, value);
+        }
+
+        if (properties.containsKey("DATABASE_URL") && !properties.containsKey("SUPABASE_DB_URL")) {
+            properties.put("SUPABASE_DB_URL", properties.get("DATABASE_URL"));
+        }
+        if (properties.containsKey("SUPABASE_DB_USER") && !properties.containsKey("SUPABASE_DB_USERNAME")) {
+            properties.put("SUPABASE_DB_USERNAME", properties.get("SUPABASE_DB_USER"));
         }
 
         return properties;
@@ -76,7 +83,7 @@ public final class DotenvPropertyLoader {
         return value;
     }
 
-    private static String normalizePostgresUrl(String value) {
+    private static String normalizePostgresUrl(String key, String value) {
         String uriValue = value.startsWith("jdbc:") ? value.substring("jdbc:".length()) : value;
         if (!uriValue.startsWith("postgresql://")) {
             return value;
@@ -86,11 +93,11 @@ public final class DotenvPropertyLoader {
         try {
             uri = URI.create(uriValue);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalArgumentException("SUPABASE_DB_URL possui um formato inválido.", exception);
+            throw new IllegalArgumentException(key + " possui um formato inválido.", exception);
         }
 
         if (uri.getHost() == null) {
-            throw new IllegalArgumentException("SUPABASE_DB_URL deve informar um host válido.");
+            throw new IllegalArgumentException(key + " deve informar um host válido.");
         }
 
         String host = uri.getHost().contains(":") ? "[" + uri.getHost() + "]" : uri.getHost();
