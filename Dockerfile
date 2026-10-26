@@ -12,8 +12,13 @@ RUN ./mvnw --batch-mode --no-transfer-progress clean package -DskipTests
 FROM eclipse-temurin:17-jre-jammy
 WORKDIR /app
 
-COPY --from=build /app/target/*.jar app.jar
+RUN groupadd -r spring && useradd -r -g spring spring && \
+    mkdir -p /app/data/documentos && chown -R spring:spring /app
 
-EXPOSE 8080
+COPY --from=build --chown=spring:spring /app/target/*.jar app.jar
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+USER spring:spring
+
+EXPOSE 8080 10000
+
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-XX:MaxRAMPercentage=75.0", "-XX:InitialRAMPercentage=50.0", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]

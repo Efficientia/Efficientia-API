@@ -107,6 +107,8 @@ class PostgresIntegrationTest {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT success FROM flyway_schema_history WHERE version = '18'", Boolean.class)).isTrue();
         assertThat(jdbcTemplate.queryForObject(
+                "SELECT success FROM flyway_schema_history WHERE version = '19'", Boolean.class)).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes WHERE schemaname = 'sc_operacao' AND indexname = 'idx_api_relatorio_motorista_status'",
                 Integer.class)).isEqualTo(1);
         assertThat(jdbcTemplate.queryForObject("""

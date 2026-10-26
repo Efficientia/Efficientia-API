@@ -7,3 +7,5 @@ data
 .idea
 .vscode
 *.log
+.agent-notes
+scripts
