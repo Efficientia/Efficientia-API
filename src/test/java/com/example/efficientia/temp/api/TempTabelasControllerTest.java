@@ -72,7 +72,8 @@ class TempTabelasControllerTest {
                 List.of("id", "status"),
                 List.of(Map.of("id", 1, "status", "concluido"))
         );
-        when(queryService.obterDadosTabela(eq("relatorios-viagem"), eq(100), eq(0), eq("id"), eq("desc")))
+        when(queryService.obterDadosTabela(eq("relatorios-viagem"), eq(100), eq(0), eq("id"), eq("desc"),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(response);
 
         mockMvc.perform(get("/api/v1/temp/tabelas/relatorios-viagem")
@@ -92,7 +93,8 @@ class TempTabelasControllerTest {
     @Test
     @DisplayName("GET /api/v1/temp/tabelas/{tabela} com identificador inválido deve retornar 400 Bad Request")
     void obterDadosTabelaInvalidaDeveRetornar400() throws Exception {
-        when(queryService.obterDadosTabela(eq("tabela_desconhecida"), any(), any(), any(), any()))
+        when(queryService.obterDadosTabela(eq("tabela_desconhecida"), any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenThrow(new IllegalArgumentException("Tabela não permitida ou desconhecida"));
 
         mockMvc.perform(get("/api/v1/temp/tabelas/tabela_desconhecida"))

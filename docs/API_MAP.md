@@ -263,7 +263,10 @@ A imagem é persistida em `sc_corporativo.tb_usuario` pela migration V14. O app 
 - **Parâmetros de Consulta:**
   - `pagina`: Número da página (padrão: `0`).
   - `tamanho`: Quantidade de itens por página (padrão: `20`).
-- **Exemplo:** `GET /api/v1/relatorios-viagem?pagina=0&tamanho=10`
+  - `status` (opcional): `rascunho`, `pendente`, `aprovado`, `concluido` ou `reprovado`.
+  - `gta` (opcional): busca parcial e sem distinção entre maiúsculas/minúsculas no número da GTA.
+- Os filtros `status` e `gta` podem ser combinados. Relatórios logicamente excluídos não aparecem. `/api/v1/relatorios-viagem/me` aceita os mesmos filtros, limitado ao motorista autenticado.
+- **Exemplo:** `GET /api/v1/relatorios-viagem?pagina=0&tamanho=10&status=pendente&gta=2026-0042`
 
 #### `GET /api/v1/relatorios-viagem/{id}`
 - **O que faz:** Retorna os detalhes completos de um relatório específico pelo seu ID numérico.

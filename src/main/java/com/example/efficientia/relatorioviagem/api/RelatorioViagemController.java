@@ -126,24 +126,28 @@ public class RelatorioViagemController {
         return service.atualizar(id, request, authentication, idempotencyKey);
     }
 
-    @Operation(summary = "Listar relatórios de viagem com paginação")
+    @Operation(summary = "Listar relatórios de viagem com paginação e filtros de busca opcionais")
     @GetMapping
     public RelatorioViagemPageResponse listar(
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "20") int tamanho,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String gta,
             Authentication authentication
     ) {
-        return service.listar(pagina, tamanho, authentication);
+        return service.listar(pagina, tamanho, status, gta, authentication);
     }
 
-    @Operation(summary = "Listar apenas os relatórios do usuário autenticado")
+    @Operation(summary = "Listar apenas os relatórios do usuário autenticado com filtros opcionais")
     @GetMapping("/me")
     public RelatorioViagemPageResponse listarMe(
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "20") int tamanho,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String gta,
             Authentication authentication
     ) {
-        return service.listarDoMotorista(pagina, tamanho, authentication);
+        return service.listarDoMotorista(pagina, tamanho, status, gta, authentication);
     }
 
     @Operation(summary = "Buscar relatório de viagem por ID com paradas e anomalias completas")

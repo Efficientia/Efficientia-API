@@ -18,6 +18,15 @@ public interface RelatorioViagemRepository extends JpaRepository<RelatorioViagem
     Page<RelatorioViagemEntity> findByMotoristaId(Integer motoristaId, Pageable pageable);
     Page<RelatorioViagemEntity> findByMotoristaIdAndStatusNot(Integer motoristaId, String status, Pageable pageable);
     Page<RelatorioViagemEntity> findByStatusNot(String status, Pageable pageable);
+    Page<RelatorioViagemEntity> findByNumeroGtaContainingIgnoreCaseAndStatusNot(String numeroGta, String status, Pageable pageable);
+    Page<RelatorioViagemEntity> findByMotoristaIdAndNumeroGtaContainingIgnoreCaseAndStatusNot(Integer motoristaId, String numeroGta, String status, Pageable pageable);
+    Page<RelatorioViagemEntity> findByStatusAndStatusNot(String status, String excludedStatus, Pageable pageable);
+    Page<RelatorioViagemEntity> findByStatusAndNumeroGtaContainingIgnoreCaseAndStatusNot(
+            String status, String numeroGta, String excludedStatus, Pageable pageable);
+    Page<RelatorioViagemEntity> findByMotoristaIdAndStatusAndStatusNot(
+            Integer motoristaId, String status, String excludedStatus, Pageable pageable);
+    Page<RelatorioViagemEntity> findByMotoristaIdAndStatusAndNumeroGtaContainingIgnoreCaseAndStatusNot(
+            Integer motoristaId, String status, String numeroGta, String excludedStatus, Pageable pageable);
 
     List<RelatorioViagemEntity> findByCavaloId(Integer cavaloId);
 

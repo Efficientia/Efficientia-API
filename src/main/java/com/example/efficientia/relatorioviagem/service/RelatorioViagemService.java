@@ -276,12 +276,74 @@ public class RelatorioViagemService {
     }
 
     public RelatorioViagemPageResponse listar(int pagina, int tamanho, Authentication authentication) {
+        return listar(pagina, tamanho, null, null, authentication);
+    }
+
+    public RelatorioViagemPageResponse listar(int pagina, int tamanho, String status, String gta, Authentication authentication) {
         validarPaginacao(pagina, tamanho);
         if (authentication == null || !authentication.isAuthenticated())
             throw new org.springframework.web.server.ResponseStatusException(
                     org.springframework.http.HttpStatus.UNAUTHORIZED, "Autenticação necessária.");
-        if (!isPerfilMotorista(authentication)) return listar(pagina, tamanho);
-        return listarDoMotorista(pagina, tamanho, authentication);
+        if (!isPerfilMotorista(authentication)) {
+            return listarComFiltros(pagina, tamanho, status, gta);
+        }
+        return listarDoMotorista(pagina, tamanho, status, gta, authentication);
+    }
+
+    public RelatorioViagemPageResponse listarComFiltros(int pagina, int tamanho, String status, String gta) {
+        validarPaginacao(pagina, tamanho);
+        var pageable = PageRequest.of(
+                pagina, tamanho,
+                Sort.by(Sort.Order.desc("dataEmbarque"), Sort.Order.desc("id"))
+        );
+        boolean hasStatus = status != null && !status.isBlank();
+        boolean hasGta = gta != null && !gta.isBlank();
+
+        String statusFiltro = hasStatus ? status.trim().toLowerCase(java.util.Locale.ROOT) : null;
+        if (hasStatus) validarStatus(statusFiltro);
+
+        org.springframework.data.domain.Page<RelatorioViagemEntity> pageResult;
+        if (hasStatus && hasGta) {
+            pageResult = repository.findByStatusAndNumeroGtaContainingIgnoreCaseAndStatusNot(
+                    statusFiltro, gta.trim(), "excluido", pageable);
+        } else if (hasStatus) {
+            pageResult = repository.findByStatusAndStatusNot(statusFiltro, "excluido", pageable);
+        } else if (hasGta) {
+            pageResult = repository.findByNumeroGtaContainingIgnoreCaseAndStatusNot(gta.trim(), "excluido", pageable);
+        } else {
+            pageResult = repository.findByStatusNot("excluido", pageable);
+        }
+        return RelatorioViagemPageResponse.from(pageResult.map(this::montarResponseCompleta));
+    }
+
+    public RelatorioViagemPageResponse listarDoMotorista(int pagina, int tamanho, String status, String gta,
+                                                          Authentication authentication) {
+        validarPaginacao(pagina, tamanho);
+        Integer usuarioId = extrairUsuarioId(authentication);
+        if (usuarioId == null) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.UNAUTHORIZED, "JWT sem identificação de usuário.");
+        var pageable = PageRequest.of(pagina, tamanho,
+                Sort.by(Sort.Order.desc("atualizadoEm"), Sort.Order.desc("id")));
+        boolean hasStatus = status != null && !status.isBlank();
+        boolean hasGta = gta != null && !gta.isBlank();
+
+        String statusFiltro = hasStatus ? status.trim().toLowerCase(java.util.Locale.ROOT) : null;
+        if (hasStatus) validarStatus(statusFiltro);
+
+        org.springframework.data.domain.Page<RelatorioViagemEntity> pageResult;
+        if (hasStatus && hasGta) {
+            pageResult = repository.findByMotoristaIdAndStatusAndNumeroGtaContainingIgnoreCaseAndStatusNot(
+                    usuarioId, statusFiltro, gta.trim(), "excluido", pageable);
+        } else if (hasStatus) {
+            pageResult = repository.findByMotoristaIdAndStatusAndStatusNot(
+                    usuarioId, statusFiltro, "excluido", pageable);
+        } else if (hasGta) {
+            pageResult = repository.findByMotoristaIdAndNumeroGtaContainingIgnoreCaseAndStatusNot(
+                    usuarioId, gta.trim(), "excluido", pageable);
+        } else {
+            pageResult = repository.findByMotoristaIdAndStatusNot(usuarioId, "excluido", pageable);
+        }
+        return RelatorioViagemPageResponse.from(pageResult.map(this::montarResponseCompleta));
     }
 
     public RelatorioViagemPageResponse listarDoMotorista(int pagina, int tamanho,
