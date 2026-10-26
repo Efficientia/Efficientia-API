@@ -16,6 +16,44 @@ CREATE TABLE IF NOT EXISTS sc_auditoria.tb_monitoramento_dau (
     usuario_id UUID NOT NULL,
     data_acesso DATE NOT NULL DEFAULT CURRENT_DATE
 );
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'sc_auditoria'
+          AND table_name = 'tb_monitoramento_dau'
+          AND column_name = 'usuario_id'
+          AND data_type = 'integer'
+    ) THEN
+        BEGIN
+            ALTER TABLE sc_auditoria.tb_monitoramento_dau
+                ALTER COLUMN usuario_id TYPE UUID
+                USING (CASE
+                    WHEN usuario_id IS NULL THEN NULL
+                    ELSE gen_random_uuid()
+                END);
+        EXCEPTION WHEN OTHERS THEN
+            ALTER TABLE sc_auditoria.tb_monitoramento_dau DROP COLUMN usuario_id CASCADE;
+            ALTER TABLE sc_auditoria.tb_monitoramento_dau ADD COLUMN usuario_id UUID;
+        END;
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'sc_auditoria'
+          AND table_name = 'tb_monitoramento_dau'
+          AND column_name = 'usuario_id'
+          AND is_nullable = 'YES'
+    ) THEN
+        DELETE FROM sc_auditoria.tb_monitoramento_dau WHERE usuario_id IS NULL;
+        ALTER TABLE sc_auditoria.tb_monitoramento_dau ALTER COLUMN usuario_id SET NOT NULL;
+    END IF;
+END $$;
+
+DROP INDEX IF EXISTS sc_auditoria.uq_monitoramento_dau_usuario_data;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_monitoramento_dau_usuario_data
     ON sc_auditoria.tb_monitoramento_dau (usuario_id, data_acesso);
 
