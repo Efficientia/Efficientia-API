@@ -102,4 +102,55 @@ class JwtTokenServiceTest {
         IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.gerarTokenAdmin(null, null));
         assertTrue(ex.getMessage().contains("Erro ao gerar token JWT de administrador"));
     }
+
+    @Test
+    @DisplayName("Deve respeitar issuer e audience customizados quando injetados")
+    void deveRespeitarIssuerEAudienceCustomizados() throws ParseException {
+        JwtTokenService service = new JwtTokenService(
+                "chave-secreta-de-teste-muito-segura-e-longa-32bytes!",
+                "meu-custom-issuer",
+                "meu-custom-audience"
+        );
+
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setId(101);
+        usuario.setNome("Maria Santos");
+        usuario.setEmail("maria@teste.com");
+        usuario.setCpf("98765432100");
+        usuario.setCodigoInterno("COD999");
+        usuario.setEmpresaId(42);
+        usuario.setTipo(TipoUsuario.motorista);
+
+        String token = service.gerarToken(usuario);
+        assertNotNull(token);
+
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
+
+        assertEquals("meu-custom-issuer", claims.getIssuer());
+        assertTrue(claims.getAudience().contains("meu-custom-audience"));
+        assertEquals(42, claims.getIntegerClaim("empresa_id"));
+    }
+
+    @Test
+    @DisplayName("Deve aplicar fallbacks seguros quando parâmetros forem nulos ou em branco")
+    void deveAplicarFallbacksSegurosQuandoNulosOuBrancos() throws ParseException {
+        JwtTokenService service = new JwtTokenService(null, "  ", "");
+
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setId(102);
+        usuario.setNome("Carlos Lima");
+        usuario.setEmail("carlos@teste.com");
+        usuario.setCpf("11122233344");
+        usuario.setTipo(TipoUsuario.motorista);
+
+        String token = service.gerarToken(usuario);
+        assertNotNull(token);
+
+        SignedJWT signedJWT = SignedJWT.parse(token);
+        JWTClaimsSet claims = signedJWT.getJWTClaimsSet();
+
+        assertEquals("efficientia-api", claims.getIssuer());
+        assertTrue(claims.getAudience().contains("efficientia-api"));
+    }
 }

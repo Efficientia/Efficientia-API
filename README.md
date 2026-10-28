@@ -211,8 +211,10 @@ MAX_PNG_SIZE=10MB
 # ==============================================================================
 SECURITY_ENABLED=false
 JWT_SECRET=efficientia-secret-key-must-be-at-least-32-bytes-long!
+JWT_ISSUER_URI=efficientia-api
+JWT_AUDIENCE=efficientia-api
+JWT_JWK_SET_URI=
 CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
-
 # ==============================================================================
 # REDIS (Optional for local development)
 # ==============================================================================
@@ -335,6 +337,15 @@ The API employs **Stateless JWT (JSON Web Token)** authentication based on the O
   ```http
   Idempotency-Key: e4a70e7a-9b16-4318-8f51-2292f7c2a714
   ```
+
+### Token Issuance & Verification Architecture
+
+The API operates as an autonomous Token Issuer and OAuth2 Resource Server:
+- **Algorithm:** Symmetric HMAC-SHA256 (`HS256`).
+- **Issuer (`iss`):** Canonical value is `efficientia-api` (configured via `JWT_ISSUER_URI`).
+- **Audience (`aud`):** `efficientia-api` (configured via `JWT_AUDIENCE`).
+- **Secret Key (`JWT_SECRET`):** Shared secret (minimum 32 bytes) used for both emission (`JwtTokenService`) and inbound validation (`NimbusJwtDecoder`).
+- **JWKS Set URI (`JWT_JWK_SET_URI`):** Must remain **empty** in Render and standard deployments so the API decodes tokens symmetrically with `JWT_SECRET`. Setting a JWK Set URI instructs the decoder to use asymmetric remote keys, which immediately rejects all internally-issued HS256 tokens.
 
 ### User Roles & Scopes
 
@@ -646,6 +657,7 @@ The following properties can be customized via `.env` or system environment vari
 | `JWT_SECRET` | *(32+ char key)* | Secret key for HS256 HMAC JWT signature generation and verification |
 | `JWT_ISSUER_URI` | `efficientia-api` | Expected issuer URI of inbound JWTs |
 | `JWT_AUDIENCE` | `efficientia-api` | Expected audience identifier |
+| `JWT_JWK_SET_URI` | *(Empty)* | Optional remote JWKS endpoint. Must remain **empty** for internal HS256 symmetric JWT validation |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated list of allowed CORS origins |
 | `REDIS_URL` | *(Empty)* | Connection URI for Redis instance (`redis://` or `rediss://`) |
 | `REDIS_STREAM_VIAGENS` | `efficientia:events:viagens` | Redis Stream topic name for travel events |

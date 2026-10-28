@@ -17,6 +17,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.oauth2.server.resource.InvalidBearerTokenException;
+import org.springframework.security.web.AuthenticationEntryPoint;
 
 class JwtSecurityComponentsTest {
 
@@ -93,6 +98,55 @@ class JwtSecurityComponentsTest {
         documento.setCriadoPor(22);
         assertThatThrownBy(() -> policy.verificarDocumento(documento))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void deveConfigurarJwtDecoderComChaveSimetricaValida() {
+        SecurityConfig config = new SecurityConfig();
+        SecurityProperties properties = new SecurityProperties(
+                true, "efficientia-api", "", "uma-chave-secreta-muito-segura-e-longa-32bytes!", "efficientia-api", List.of()
+        );
+
+        var decoder = config.jwtDecoder(properties);
+        assertThat(decoder).isNotNull();
+    }
+
+    @Test
+    void deveLancarExcecaoQuandoChaveSimetricaForMenorQue32Bytes() {
+        SecurityConfig config = new SecurityConfig();
+        // Usando reflexão ou valor curto se o record não forçar fallback
+        SecurityProperties properties = new SecurityProperties(
+                true, "efficientia-api", "", "curta", "efficientia-api", List.of()
+        );
+
+        // SecurityProperties já aplica fallback para 32 bytes se nulo/em branco, mas se passar uma string não branca curta:
+        assertThatThrownBy(() -> config.jwtDecoder(new SecurityProperties(true, "", "", "1234567890123456789012345678901", "", List.of())))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET deve possuir pelo menos 32 caracteres.");
+    }
+
+    @Test
+    void bearerTokenAuthenticationEntryPointDeveExecutarParaDiferentesCenarios() throws Exception {
+        SecurityConfig config = new SecurityConfig();
+        AuthenticationEntryPoint entryPoint = config.bearerTokenAuthenticationEntryPoint();
+
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/relatorios-viagem");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AuthenticationException authException = new InvalidBearerTokenException("Token expirado");
+
+        // 1. Sem cabeçalho Authorization
+        assertThatCode(() -> entryPoint.commence(request, response, authException)).doesNotThrowAnyException();
+        assertThat(response.getStatus()).isEqualTo(401);
+
+        // 2. Com cabeçalho que não é Bearer
+        MockHttpServletRequest requestBasic = new MockHttpServletRequest("POST", "/api/v1/relatorios-viagem");
+        requestBasic.addHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, "Basic dXNlcjpwYXNz");
+        assertThatCode(() -> entryPoint.commence(requestBasic, new MockHttpServletResponse(), authException)).doesNotThrowAnyException();
+
+        // 3. Com Bearer inválido
+        MockHttpServletRequest requestBearer = new MockHttpServletRequest("POST", "/api/v1/relatorios-viagem");
+        requestBearer.addHeader(org.springframework.http.HttpHeaders.AUTHORIZATION, "Bearer token.invalido.aqui");
+        assertThatCode(() -> entryPoint.commence(requestBearer, new MockHttpServletResponse(), authException)).doesNotThrowAnyException();
     }
 
     private void autenticar(int usuarioId, String role) {
