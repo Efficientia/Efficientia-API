@@ -20,6 +20,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         controllers = ApiStatusController.class,
         properties = {
                 "app.security.enabled=true",
+                "app.security.issuer=efficientia-api",
+                "app.security.jwk-set-uri=",
                 "app.security.audience=efficientia-api",
                 "app.security.secret=efficientia-secret-key-must-be-at-least-32-bytes-long!"
         }
@@ -72,6 +74,47 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/api/v1/relatorios-viagem")
                         .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ANALISTA"))))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void tokenRealHs256EmitidoPeloServiceDeveAutenticarComSucesso() throws Exception {
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setId(200);
+        usuario.setNome("Motorista Real");
+        usuario.setEmail("motorista@real.com");
+        usuario.setCpf("12345678900");
+        usuario.setCodigoInterno("COD123");
+        usuario.setTipo(TipoUsuario.motorista);
+
+        String token = jwtTokenService.gerarToken(usuario);
+
+        mockMvc.perform(get("/api/v1/relatorios-viagem")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound()); // Passou por 401 e 403, bateu no dispatcher sem controller no slice
+    }
+
+    @Test
+    void tokenComAssinaturaIncompativelDeveRetornar401() throws Exception {
+        JwtTokenService fakeService = new JwtTokenService("outra-chave-secreta-totalmente-diferente-32b!");
+        UsuarioEntity usuario = new UsuarioEntity();
+        usuario.setId(201);
+        usuario.setNome("Fake");
+        usuario.setEmail("fake@teste.com");
+        usuario.setCpf("99999999999");
+        usuario.setTipo(TipoUsuario.motorista);
+
+        String fakeToken = fakeService.gerarToken(usuario);
+
+        mockMvc.perform(get("/api/v1/relatorios-viagem")
+                        .header("Authorization", "Bearer " + fakeToken))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void requisicaoComEsquemaNaoBearerDeveRetornar401() throws Exception {
+        mockMvc.perform(get("/api/v1/relatorios-viagem")
+                        .header("Authorization", "Basic dXNlcjpwYXNz"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
