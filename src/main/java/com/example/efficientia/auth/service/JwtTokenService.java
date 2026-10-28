@@ -21,14 +21,26 @@ import java.util.List;
 public class JwtTokenService {
 
     private final String secret;
+    private final String issuer;
+    private final String audience;
 
-    public JwtTokenService(@Value("${app.jwt.secret:efficientia-secret-key-must-be-at-least-32-bytes-long!}") String secret) {
-        // Garantir que a chave tenha pelo menos 256 bits (32 bytes) para HMAC-SHA256
-        if (secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public JwtTokenService(
+            @Value("${app.security.secret:${app.jwt.secret:${JWT_SECRET:efficientia-secret-key-must-be-at-least-32-bytes-long!}}}") String secret,
+            @Value("${app.security.issuer:${JWT_ISSUER_URI:efficientia-api}}") String issuer,
+            @Value("${app.security.audience:${JWT_AUDIENCE:efficientia-api}}") String audience
+    ) {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
             this.secret = "efficientia-secret-key-must-be-at-least-32-bytes-long!";
         } else {
             this.secret = secret;
         }
+        this.issuer = (issuer == null || issuer.isBlank()) ? "efficientia-api" : issuer.strip();
+        this.audience = (audience == null || audience.isBlank()) ? "efficientia-api" : audience.strip();
+    }
+
+    public JwtTokenService(String secret) {
+        this(secret, "efficientia-api", "efficientia-api");
     }
 
     public String gerarToken(UsuarioEntity usuario) {
@@ -40,8 +52,8 @@ public class JwtTokenService {
 
             JWTClaimsSet.Builder claimsBuilder = new JWTClaimsSet.Builder()
                     .subject(String.valueOf(usuario.getId()))
-                    .issuer("efficientia-api")
-                    .audience(List.of("efficientia-api"))
+                    .issuer(issuer)
+                    .audience(List.of(audience))
                     .issueTime(Date.from(agora))
                     .expirationTime(Date.from(expiracao))
                     .claim("usuario_id", usuario.getId())
@@ -74,8 +86,8 @@ public class JwtTokenService {
 
             JWTClaimsSet.Builder builder = new JWTClaimsSet.Builder()
                     .subject(String.valueOf(admin.getId()))
-                    .issuer("efficientia-api")
-                    .audience(List.of("efficientia-api"))
+                    .issuer(issuer)
+                    .audience(List.of(audience))
                     .issueTime(Date.from(agora))
                     .expirationTime(Date.from(expiracao))
                     .claim("admin_id", admin.getId())
