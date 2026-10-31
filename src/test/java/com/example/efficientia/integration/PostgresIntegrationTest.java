@@ -57,6 +57,34 @@ class PostgresIntegrationTest {
 
     @Test
     @org.springframework.transaction.annotation.Transactional
+    void permiteNovoDiarioAposEnvioEOutrosRascunhosDoMesmoMotorista() {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT success FROM flyway_schema_history WHERE version = '21'", Boolean.class)).isTrue();
+        jdbcTemplate.update("""
+                INSERT INTO sc_corporativo.tb_usuario (id, tipo, cpf, nome, senha_hash)
+                VALUES (8991, 'motorista', '00000008991', 'Motorista multiplos diarios', 'hash')
+                ON CONFLICT DO NOTHING
+                """);
+        String gta = "MULTI-" + UUID.randomUUID();
+        Integer primeiroId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (8991, 'rascunho', ?) RETURNING id
+                """, Integer.class, gta + "-1");
+        jdbcTemplate.update("UPDATE sc_operacao.tb_relatorio_viagem SET status = 'pendente' WHERE id = ?",
+                primeiroId);
+        Integer segundoId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (8991, 'rascunho', ?) RETURNING id
+                """, Integer.class, gta + "-2");
+        Integer terceiroId = jdbcTemplate.queryForObject("""
+                INSERT INTO sc_operacao.tb_relatorio_viagem (motorista_id, status, numero_gta)
+                VALUES (8991, 'rascunho', ?) RETURNING id
+                """, Integer.class, gta + "-3");
+        assertThat(List.of(primeiroId, segundoId, terceiroId)).doesNotHaveDuplicates();
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
     void deveAplicarV15EAceitarRascunhoParcialComLocaisDigitadosNoPostgres() {
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT success FROM flyway_schema_history WHERE version = '15'", Boolean.class)).isTrue();
