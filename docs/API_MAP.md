@@ -127,6 +127,19 @@ O campo `commit` contém o SHA disponibilizado pelo Render em `RENDER_GIT_COMMIT
 ```
 - **Erros Possíveis:** `401 Unauthorized` (`{"title": "Falha na autenticação", "detail": "Credenciais inválidas."}`).
 
+#### `POST /api/v1/auth/codigo/solicitar` — Enviar código de login
+- **Autenticação:** Pública.
+- **Corpo:** `{"email":"motorista@exemplo.com","perfil":"motorista"}`. O perfil também pode ser `administrador`.
+- **Resposta (200):** Mensagem genérica, mesmo quando o e-mail não pertence a uma conta ativa.
+- **Limites:** Código de seis dígitos, válido por 10 minutos. Novo envio após 1 minuto (`429` se antecipado).
+
+#### `POST /api/v1/auth/codigo/validar` — Entrar com código
+- **Autenticação:** Pública.
+- **Corpo:** `{"email":"motorista@exemplo.com","perfil":"motorista","codigo":"123456"}`.
+- **Resposta (200):** Mesmo contrato do login por senha do perfil: `token`, `tokenType` e `usuario` para motorista; `token`, `tokenType`, `admin` e `empresa` para administrador.
+- **Erros:** `401` para código inválido ou expirado. Até cinco tentativas por código; após uso, o código é removido.
+- **Configuração de envio:** Definir `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` e `MAIL_FROM` no ambiente da API. Sem SMTP configurado, a solicitação responde `503`.
+
 #### `POST /api/v1/empresas` (ou `POST /api/v1/auth/empresas`) — Cadastro de Empresas
 - **O que faz:** Cadastra uma nova empresa parceira e gera automaticamente o **código corporativo de 8 dígitos** (3 letras iniciais + 5 números aleatórios, ex: `FRI48291`). **Obrigatoriedade:** Logo após este cadastro, o frontend deve direcionar obrigatoriamente para o cadastro do primeiro administrador.
 - **Autenticação:** Pública (`permitAll()`).

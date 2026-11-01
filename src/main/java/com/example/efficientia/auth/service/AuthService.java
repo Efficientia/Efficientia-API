@@ -139,4 +139,26 @@ public class AuthService {
         UsuarioResponse usuarioResponse = UsuarioResponse.from(usuario, assinaturaFixaCadastrada, assinaturaFixaId);
         return new LoginResponse(token, usuarioResponse);
     }
+
+    @Transactional(readOnly = true)
+    public LoginResponse autenticarPorCodigo(UsuarioEntity usuario) {
+        if (usuario.getTipo() != TipoUsuario.motorista || !Boolean.TRUE.equals(usuario.getAtivo())) {
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
+        }
+        Boolean temAssinatura = false;
+        UUID assinaturaId = null;
+        if (assinaturaMotoristaRepository != null) {
+            Optional<AssinaturaMotoristaEntity> assinatura = assinaturaMotoristaRepository
+                    .findByMotoristaIdAndAtivaTrue(usuario.getId());
+            if (assinatura.isPresent()) {
+                temAssinatura = true;
+                assinaturaId = assinatura.get().getId();
+                if (usuario.getUrlAssinaturaGeral() == null) {
+                    usuario.setUrlAssinaturaGeral("/api/v1/usuarios/me/assinatura/conteudo");
+                }
+            }
+        }
+        return new LoginResponse(jwtTokenService.gerarToken(usuario),
+                UsuarioResponse.from(usuario, temAssinatura, assinaturaId));
+    }
 }
