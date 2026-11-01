@@ -7,6 +7,7 @@ import com.example.efficientia.cadastrobase.persistence.UsuarioRepository;
 import com.example.efficientia.empresa.domain.EmpresaAdmin;
 import com.example.efficientia.empresa.persistence.EmpresaAdminRepository;
 import com.example.efficientia.empresa.service.EmpresaAdminService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,7 +36,7 @@ public class CodigoLoginService {
     private final String segredo;
     private final SecureRandom random = new SecureRandom();
 
-    public CodigoLoginService(JdbcTemplate jdbc, JavaMailSender mail,
+    public CodigoLoginService(@Autowired(required = false) JdbcTemplate jdbc, JavaMailSender mail,
                               UsuarioRepository usuarios, EmpresaAdminRepository admins,
                               AuthService authService, EmpresaAdminService adminService,
                               @Value("${app.mail.from:}") String remetente,
@@ -52,6 +53,7 @@ public class CodigoLoginService {
 
     @Transactional
     public void solicitar(String emailInformado, String perfil) {
+        exigirBancoConfigurado();
         String email = emailInformado.trim().toLowerCase(Locale.ROOT);
         if (remetente == null || remetente.isBlank()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -87,6 +89,7 @@ public class CodigoLoginService {
 
     @Transactional(noRollbackFor = AutenticacaoInvalidaException.class)
     public Object validar(String emailInformado, String perfil, String codigo) {
+        exigirBancoConfigurado();
         String email = emailInformado.trim().toLowerCase(Locale.ROOT);
         String esperado = jdbc.query("SELECT codigo_hash FROM sc_corporativo.tb_codigo_login_email "
                 + "WHERE email = ? AND perfil = ? AND expira_em > now() AND tentativas < 5 FOR UPDATE",
@@ -119,6 +122,13 @@ public class CodigoLoginService {
         if ("administrador".equals(perfil)) return admins.buscarPorEmail(email)
                 .map(a -> Boolean.TRUE.equals(a.getAtivo())).orElse(false);
         return false;
+    }
+
+    private void exigirBancoConfigurado() {
+        if (jdbc == null) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Banco de dados indisponível para login por código.");
+        }
     }
 
     private String hash(String email, String perfil, String codigo) {
