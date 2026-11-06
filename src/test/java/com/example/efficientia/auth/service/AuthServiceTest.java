@@ -74,6 +74,44 @@ class AuthServiceTest {
     }
 
     @Test
+    void deveAutenticarMotoristasDiferentesDaMesmaEmpresaComMesmoCodigoInterno() {
+        UsuarioEntity primeiroMotorista = criarUsuarioMock();
+        primeiroMotorista.setCpf("11111111111");
+        primeiroMotorista.setEmail("primeiro.motorista@test.com");
+        primeiroMotorista.setEmpresaId(42);
+
+        UsuarioEntity segundoMotorista = criarUsuarioMock();
+        segundoMotorista.setCpf("22222222222");
+        segundoMotorista.setEmail("segundo.motorista@test.com");
+        segundoMotorista.setEmpresaId(42);
+
+        when(usuarioRepository.findByCpf("11111111111")).thenReturn(Optional.of(primeiroMotorista));
+        when(usuarioRepository.findByCpf("22222222222")).thenReturn(Optional.of(segundoMotorista));
+        when(jwtTokenService.gerarToken(primeiroMotorista)).thenReturn("primeiro.jwt.token");
+        when(jwtTokenService.gerarToken(segundoMotorista)).thenReturn("segundo.jwt.token");
+
+        LoginResponse primeiraResposta = authService.autenticar(new LoginRequest(
+                "11111111111",
+                "primeiro.motorista@test.com",
+                "senha123",
+                "EMP-100"
+        ));
+        LoginResponse segundaResposta = authService.autenticar(new LoginRequest(
+                "22222222222",
+                "segundo.motorista@test.com",
+                "senha123",
+                "EMP-100"
+        ));
+
+        assertNotNull(primeiraResposta);
+        assertNotNull(segundaResposta);
+        assertEquals("primeiro.jwt.token", primeiraResposta.token());
+        assertEquals("segundo.jwt.token", segundaResposta.token());
+        assertEquals("11111111111", primeiraResposta.usuario().cpf());
+        assertEquals("22222222222", segundaResposta.usuario().cpf());
+    }
+
+    @Test
     void deveAutenticarMotoristaComAssinaturaFixaCadastrada() {
         UsuarioEntity usuario = criarUsuarioMock();
         UUID assinaturaId = UUID.randomUUID();

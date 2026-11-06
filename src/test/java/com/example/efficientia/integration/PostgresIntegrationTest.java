@@ -3,6 +3,11 @@ package com.example.efficientia.integration;
 import com.example.efficientia.exportacao.domain.EstadoExportacao;
 import com.example.efficientia.exportacao.persistence.ExportacaoEntity;
 import com.example.efficientia.exportacao.persistence.ExportacaoRepository;
+import com.example.efficientia.auth.api.AuthContracts.LoginRequest;
+import com.example.efficientia.auth.service.AuthService;
+import com.example.efficientia.cadastrobase.domain.TipoUsuario;
+import com.example.efficientia.empresa.api.EmpresaAdminContracts.CriarFuncionarioEmpresaRequest;
+import com.example.efficientia.empresa.service.EmpresaAdminService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -54,6 +59,12 @@ class PostgresIntegrationTest {
     private com.example.efficientia.relatorioviagem.service.RelatorioViagemService relatorioViagemService;
     @Autowired
     private com.example.efficientia.temp.service.TempTabelasQueryService tempTabelasQueryService;
+
+    @Autowired
+    private EmpresaAdminService empresaAdminService;
+
+    @Autowired
+    private AuthService authService;
 
     @Test
     @org.springframework.transaction.annotation.Transactional
@@ -232,5 +243,89 @@ class PostgresIntegrationTest {
                 "relatorios-viagem", 20, 0, null, null, busca.toLowerCase(java.util.Locale.ROOT));
         assertThat(genericSearch.totalRegistros()).isEqualTo(3);
         assertThat(genericSearch.dados()).hasSize(3);
+    }
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void permiteDoisFuncionariosNaMesmaEmpresaComCodigoCompartilhadoNoPostgres() {
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT success FROM flyway_schema_history WHERE version = '21'", Boolean.class)).isTrue();
+        String sufixo = UUID.randomUUID().toString().replace("-", "");
+        String codigoEmpresa = "T" + sufixo.substring(0, 19);
+        String cnpj = String.format("8%013d",
+                Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 9_999_999_999_999L));
+        String emailEmpresa = "empresa-" + sufixo + "@test.com";
+        Long empresaId = jdbcTemplate.queryForObject("""
+                INSERT INTO public.empresa (codigo_interno, nome, razao_social, cnpj, email)
+                VALUES (?, 'Empresa teste tenant', 'Empresa teste tenant LTDA', ?, ?)
+                RETURNING id
+                """, Long.class, codigoEmpresa, cnpj, emailEmpresa);
+        Long adminId = jdbcTemplate.queryForObject("""
+                INSERT INTO public.empresa_admin
+                    (empresa_id, codigo_empresa, cnpj_empresa, nome, email, cpf, telefone, cargo, senha_hash)
+                VALUES (?, ?, ?, 'Admin teste tenant', ?, ?, '11999990000', 'Administrador', 'hash')
+                RETURNING id
+                """, Long.class, empresaId, codigoEmpresa, cnpj,
+                "admin-" + sufixo + "@test.com",
+                String.format("91%09d", Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 100_000_000L)));
+
+        long cpfSemente = Math.floorMod(UUID.randomUUID().getMostSignificantBits(), 99_999_998L) + 1;
+        String primeiroCpf = String.format("90%09d", cpfSemente);
+        String segundoCpf = String.format("90%09d", cpfSemente + 1);
+        String primeiroEmail = "funcionario1-" + sufixo + "@test.com";
+        String segundoEmail = "funcionario2-" + sufixo + "@test.com";
+
+        empresaAdminService.cadastrarFuncionario(empresaId, new CriarFuncionarioEmpresaRequest(
+                TipoUsuario.motorista, primeiroCpf, "Motorista tenant um", null, primeiroEmail,
+                "11999990001", "senha123", "Motorista", null, null
+        ), adminId);
+        empresaAdminService.cadastrarFuncionario(empresaId, new CriarFuncionarioEmpresaRequest(
+                TipoUsuario.motorista, segundoCpf, "Motorista tenant dois", null, segundoEmail,
+                "11999990002", "senha123", "Motorista", null, null
+        ), adminId);
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT empresa_id FROM sc_corporativo.tb_usuario WHERE cpf = ?", Integer.class, primeiroCpf))
+                .isEqualTo(empresaId.intValue());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT empresa_id FROM sc_corporativo.tb_usuario WHERE cpf = ?", Integer.class, segundoCpf))
+                .isEqualTo(empresaId.intValue());
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT codigo_interno FROM sc_corporativo.tb_usuario WHERE cpf = ?", String.class, primeiroCpf))
+                .isEqualTo(codigoEmpresa);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT codigo_interno FROM sc_corporativo.tb_usuario WHERE cpf = ?", String.class, segundoCpf))
+                .isEqualTo(codigoEmpresa);
+
+        var funcionarios = empresaAdminService.listarFuncionariosPorEmpresa(empresaId, adminId);
+        assertThat(funcionarios).hasSize(2)
+                .extracting(funcionario -> funcionario.cpf())
+                .containsExactlyInAnyOrder(primeiroCpf, segundoCpf);
+
+        var primeiraResposta = authService.autenticar(new LoginRequest(
+                primeiroCpf, primeiroEmail, "senha123", codigoEmpresa));
+        var segundaResposta = authService.autenticar(new LoginRequest(
+                segundoCpf, segundoEmail, "senha123", codigoEmpresa));
+        assertThat(primeiraResposta.usuario().cpf()).isEqualTo(primeiroCpf);
+        assertThat(segundaResposta.usuario().cpf()).isEqualTo(segundoCpf);
+        assertThat(primeiraResposta.token()).isNotBlank();
+        assertThat(segundaResposta.token()).isNotBlank();
+
+        assertThat(jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM pg_indexes
+                WHERE schemaname = 'sc_corporativo' AND tablename = 'tb_usuario'
+                  AND indexdef LIKE 'CREATE UNIQUE INDEX%'
+                  AND indexdef ILIKE '%(codigo_interno)'
+                """, Integer.class)).isZero();
+        for (String coluna : List.of("cpf", "email")) {
+            assertThat(jdbcTemplate.queryForObject("""
+                    SELECT COUNT(*) FROM pg_indexes
+                    WHERE schemaname = 'sc_corporativo' AND tablename = 'tb_usuario'
+                      AND indexdef LIKE 'CREATE UNIQUE INDEX%'
+                      AND indexdef ILIKE ?
+                    """, Integer.class, "%(" + coluna + ")"))
+                    .as("índice único de %s", coluna)
+                    .isEqualTo(1);
+        }
     }
 }
