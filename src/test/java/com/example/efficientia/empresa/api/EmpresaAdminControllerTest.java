@@ -264,6 +264,70 @@ class EmpresaAdminControllerTest {
     }
 
     @Test
+    @DisplayName("Deve cadastrar e listar dois motoristas distintos na mesma empresa")
+    void deveCadastrarEDepoisListarDoisMotoristasDaEmpresa() throws Exception {
+        var funcionario1 = new com.example.efficientia.empresa.api.EmpresaAdminContracts.FuncionarioEmpresaResponse(
+                101, 1L, "FRI12345", com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
+                "José Silva", "11122233344", "jose@friboi.com.br", "11988887777", "Motorista", true, Instant.now()
+        );
+        var funcionario2 = new com.example.efficientia.empresa.api.EmpresaAdminContracts.FuncionarioEmpresaResponse(
+                102, 1L, "FRI12345", com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
+                "Maria Souza", "55566677788", "maria@friboi.com.br", "11977776666", "Motorista", true, Instant.now()
+        );
+
+        when(service.cadastrarFuncionario(eq(1L), any(), any())).thenReturn(funcionario1, funcionario2);
+        when(service.listarFuncionariosPorEmpresa(eq(1L), any())).thenReturn(List.of(funcionario1, funcionario2));
+
+        mockMvc.perform(post("/api/v1/empresas/1/funcionarios")
+                        .with(jwt().jwt(jwt -> jwt.claim("admin_id", 10L).subject("10")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tipo": "motorista",
+                                  "cpf": "11122233344",
+                                  "nome": "José Silva",
+                                  "email": "jose@friboi.com.br",
+                                  "telefone": "11988887777",
+                                  "senha": "senhaSegura123",
+                                  "cargo": "Motorista Carreteiro"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigoEmpresa").value("FRI12345"))
+                .andExpect(jsonPath("$.cpf").value("11122233344"))
+                .andExpect(jsonPath("$.email").value("jose@friboi.com.br"));
+
+        mockMvc.perform(post("/api/v1/empresas/1/funcionarios")
+                        .with(jwt().jwt(jwt -> jwt.claim("admin_id", 10L).subject("10")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "tipo": "motorista",
+                                  "cpf": "55566677788",
+                                  "nome": "Maria Souza",
+                                  "email": "maria@friboi.com.br",
+                                  "telefone": "11977776666",
+                                  "senha": "senhaSegura456",
+                                  "cargo": "Motorista Carreteiro"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigoEmpresa").value("FRI12345"))
+                .andExpect(jsonPath("$.cpf").value("55566677788"))
+                .andExpect(jsonPath("$.email").value("maria@friboi.com.br"));
+
+        mockMvc.perform(get("/api/v1/empresas/1/funcionarios")
+                        .with(jwt().jwt(jwt -> jwt.claim("admin_id", 10L).subject("10"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].cpf").value("11122233344"))
+                .andExpect(jsonPath("$[0].email").value("jose@friboi.com.br"))
+                .andExpect(jsonPath("$[1].cpf").value("55566677788"))
+                .andExpect(jsonPath("$[1].email").value("maria@friboi.com.br"));
+    }
+
+
+    @Test
     @DisplayName("Deve aceitar primeiro acesso via alias POST /api/v1/empresas/{empresaId}/primeiro-admin")
     void deveAceitarPrimeiroAcessoViaAlias() throws Exception {
         AdminResponse adminResp = new AdminResponse(

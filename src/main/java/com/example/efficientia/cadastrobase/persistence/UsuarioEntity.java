@@ -31,7 +31,7 @@ public class UsuarioEntity {
     @Column(name = "cpf", nullable = false, unique = true, length = 11)
     private String cpf;
 
-    @Column(name = "codigo_interno", unique = true, length = 50)
+    @Column(name = "codigo_interno", length = 50)
     private String codigoInterno;
 
     @Column(name = "nome", nullable = false, length = 150)

@@ -276,6 +276,7 @@ public class EmpresaAdminService {
             entity.setEmail(emailLimpo);
             entity.setTelefone(telefoneLimpo);
             entity.setCodigoInterno(empresa.getCodigoEmpresa());
+            entity.setEmpresaId(Math.toIntExact(empresa.getId()));
             entity.setSenhaHash(passwordEncoder.encode(request.senha()));
             entity.setAtivo(true);
 
@@ -323,8 +324,7 @@ public class EmpresaAdminService {
         validarAdminPertenceEmpresa(empresaId, adminLogadoId, "Você não tem permissão para visualizar funcionários de outra empresa.");
 
         if (usuarioRepository != null) {
-            return usuarioRepository.findAll().stream()
-                    .filter(u -> empresa.getCodigoEmpresa().equalsIgnoreCase(u.getCodigoInterno()))
+            return usuarioRepository.findByEmpresaId(Math.toIntExact(empresa.getId())).stream()
                     .filter(u -> u.getTipo() != TipoUsuario.administrador)
                     .map(u -> new FuncionarioEmpresaResponse(
                             u.getId(),
@@ -371,6 +371,7 @@ public class EmpresaAdminService {
                 usuario.setEmail(admin.getEmail());
                 usuario.setTelefone(admin.getTelefone());
                 usuario.setCodigoInterno(empresa.getCodigoEmpresa());
+                usuario.setEmpresaId(Math.toIntExact(empresa.getId()));
                 usuario.setSenhaHash(admin.getSenhaHash());
                 usuario.setAtivo(true);
                 usuarioRepository.save(usuario);

@@ -520,7 +520,7 @@ class EmpresaAdminServiceTest {
         assertThrows(CadastroDuplicadoException.class, () -> fullService.cadastrarFuncionario(1L, reqFuncEmail, 10L));
 
         // Teste 3: Listar funcionarios
-        when(userRepo.findAll()).thenReturn(List.of());
+        when(userRepo.findByEmpresaId(1)).thenReturn(List.of());
         assertEquals(0, fullService.listarFuncionariosPorEmpresa(1L, 10L).size());
     }
 
@@ -689,11 +689,12 @@ class EmpresaAdminServiceTest {
                 ArgumentCaptor.forClass(com.example.efficientia.cadastrobase.persistence.UsuarioEntity.class);
         verify(userRepository).save(captor.capture());
         assertEquals("FRI12345", captor.getValue().getCodigoInterno());
+        assertEquals(1, captor.getValue().getEmpresaId());
         assertTrue(passwordEncoder.matches("senhaMot123", captor.getValue().getSenhaHash()));
     }
 
     @Test
-    @DisplayName("Deve filtrar funcionários por empresa e excluir administradores da listagem")
+    @DisplayName("Deve listar funcionários da empresa por tenant e excluir administradores")
     void deveFiltrarFuncionariosPorEmpresaEExcluirAdmins() {
         com.example.efficientia.cadastrobase.persistence.UsuarioRepository userRepository =
                 org.mockito.Mockito.mock(com.example.efficientia.cadastrobase.persistence.UsuarioRepository.class);
@@ -705,21 +706,78 @@ class EmpresaAdminServiceTest {
                 null, null, null, "hash", true, Instant.now(), Instant.now()
         );
         var motorista = criarUsuario(41, com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
-                "fri12345", "Motorista", "motorista@exemplo.com");
-        var adminEmpresa = criarUsuario(42, com.example.efficientia.cadastrobase.domain.TipoUsuario.administrador,
+                "FRI12345", "Motorista", "motorista@exemplo.com");
+        motorista.setEmpresaId(1);
+        var segundoMotorista = criarUsuario(42, com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
+                "FRI12345", "Segundo Motorista", "segundo@exemplo.com");
+        segundoMotorista.setEmpresaId(1);
+        var adminEmpresa = criarUsuario(43, com.example.efficientia.cadastrobase.domain.TipoUsuario.administrador,
                 "FRI12345", "Outro admin", "outro-admin@exemplo.com");
-        var motoristaDeOutraEmpresa = criarUsuario(43, com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
-                "OUTRA", "Outro motorista", "outro@exemplo.com");
+        adminEmpresa.setEmpresaId(1);
+        var funcionarioDeOutraEmpresa = criarUsuario(44, com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista,
+                "FRI12345", "Outro motorista", "outro@exemplo.com");
+        funcionarioDeOutraEmpresa.setEmpresaId(2);
         when(empresaRepository.buscarPorId(1L)).thenReturn(Optional.of(empresaMock));
         when(adminRepository.buscarPorId(10L)).thenReturn(Optional.of(adminLogado));
-        when(userRepository.findAll()).thenReturn(List.of(motorista, adminEmpresa, motoristaDeOutraEmpresa));
+        when(userRepository.findByEmpresaId(1)).thenReturn(List.of(motorista, segundoMotorista, adminEmpresa));
 
         var funcionarios = serviceComUsuarios.listarFuncionariosPorEmpresa(1L, 10L);
 
-        assertEquals(1, funcionarios.size());
-        assertEquals(41, funcionarios.get(0).id());
-        assertEquals("Motorista", funcionarios.get(0).nome());
-        assertEquals("motorista", funcionarios.get(0).cargo());
+        verify(userRepository).findByEmpresaId(1);
+        assertEquals(2, funcionarios.size());
+        assertEquals(List.of(41, 42), funcionarios.stream().map(com.example.efficientia.empresa.api.EmpresaAdminContracts.FuncionarioEmpresaResponse::id).toList());
+        assertTrue(funcionarios.stream().allMatch(funcionario -> "motorista".equals(funcionario.cargo())));
+    }
+
+    @Test
+    @DisplayName("Deve cadastrar e listar dois funcionários com o mesmo código interno na mesma empresa")
+    void deveCadastrarDoisFuncionariosComMesmoCodigoInternoNaMesmaEmpresa() {
+        com.example.efficientia.cadastrobase.persistence.UsuarioRepository userRepository =
+                org.mockito.Mockito.mock(com.example.efficientia.cadastrobase.persistence.UsuarioRepository.class);
+        EmpresaAdminService serviceComUsuarios = new EmpresaAdminService(
+                empresaRepository, adminRepository, jwtTokenService, userRepository
+        );
+        EmpresaAdmin adminLogado = new EmpresaAdmin(
+                10L, 1L, "FRI12345", "12345678000195", "Admin", "admin@friboi.com.br",
+                null, null, null, "hash", true, Instant.now(), Instant.now()
+        );
+        List<com.example.efficientia.cadastrobase.persistence.UsuarioEntity> salvos = new java.util.ArrayList<>();
+        when(empresaRepository.buscarPorId(1L)).thenReturn(Optional.of(empresaMock));
+        when(adminRepository.buscarPorId(10L)).thenReturn(Optional.of(adminLogado));
+        when(userRepository.existsByCpf(anyString())).thenReturn(false);
+        when(userRepository.existsByEmail(anyString())).thenReturn(false);
+        when(userRepository.save(any(com.example.efficientia.cadastrobase.persistence.UsuarioEntity.class)))
+                .thenAnswer(invocation -> {
+                    com.example.efficientia.cadastrobase.persistence.UsuarioEntity usuario = invocation.getArgument(0);
+                    usuario.setId(salvos.size() + 1);
+                    salvos.add(usuario);
+                    return usuario;
+                });
+        when(userRepository.findByEmpresaId(1)).thenAnswer(invocation -> salvos);
+
+        serviceComUsuarios.cadastrarFuncionario(1L, new com.example.efficientia.empresa.api.EmpresaAdminContracts.CriarFuncionarioEmpresaRequest(
+                com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista, "11122233344", "Primeiro Motorista",
+                null, "primeiro@exemplo.com", null, "senhaSegura1", null, null, null, null
+        ), 10L);
+        serviceComUsuarios.cadastrarFuncionario(1L, new com.example.efficientia.empresa.api.EmpresaAdminContracts.CriarFuncionarioEmpresaRequest(
+                com.example.efficientia.cadastrobase.domain.TipoUsuario.motorista, "22233344455", "Segundo Motorista",
+                null, "segundo@exemplo.com", null, "senhaSegura2", null, null, null, null
+        ), 10L);
+
+        ArgumentCaptor<com.example.efficientia.cadastrobase.persistence.UsuarioEntity> captor =
+                ArgumentCaptor.forClass(com.example.efficientia.cadastrobase.persistence.UsuarioEntity.class);
+        verify(userRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        List<com.example.efficientia.cadastrobase.persistence.UsuarioEntity> cadastrados = captor.getAllValues();
+        assertEquals(2, cadastrados.size());
+        assertEquals("FRI12345", cadastrados.get(0).getCodigoInterno());
+        assertEquals(cadastrados.get(0).getCodigoInterno(), cadastrados.get(1).getCodigoInterno());
+        assertEquals(1, cadastrados.get(0).getEmpresaId());
+        assertEquals(cadastrados.get(0).getEmpresaId(), cadastrados.get(1).getEmpresaId());
+        assertTrue(!cadastrados.get(0).getId().equals(cadastrados.get(1).getId()));
+
+        var funcionarios = serviceComUsuarios.listarFuncionariosPorEmpresa(1L, 10L);
+        assertEquals(2, funcionarios.size());
+        assertEquals(List.of(1, 2), funcionarios.stream().map(com.example.efficientia.empresa.api.EmpresaAdminContracts.FuncionarioEmpresaResponse::id).toList());
     }
 
     @Test
