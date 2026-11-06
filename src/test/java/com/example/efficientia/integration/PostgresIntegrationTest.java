@@ -277,7 +277,7 @@ class PostgresIntegrationTest {
     @org.springframework.transaction.annotation.Transactional
     void permiteDoisFuncionariosNaMesmaEmpresaComCodigoCompartilhadoNoPostgres() {
         assertThat(jdbcTemplate.queryForObject(
-                "SELECT success FROM flyway_schema_history WHERE version = '21'", Boolean.class)).isTrue();
+                "SELECT success FROM flyway_schema_history WHERE version = '25'", Boolean.class)).isTrue();
         String sufixo = UUID.randomUUID().toString().replace("-", "");
         String codigoEmpresa = "T" + sufixo.substring(0, 19);
         String cnpj = String.format("8%013d",
