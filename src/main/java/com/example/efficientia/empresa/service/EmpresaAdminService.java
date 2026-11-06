@@ -237,6 +237,16 @@ public class EmpresaAdminService {
         return new LoginAdminResponse(token, AdminResponse.from(admin), toEmpresaResponse(empresa));
     }
 
+    public LoginAdminResponse autenticarPorCodigo(EmpresaAdmin admin) {
+        if (!Boolean.TRUE.equals(admin.getAtivo())) {
+            throw new AutenticacaoInvalidaException("Credenciais inválidas.");
+        }
+        Empresa empresa = empresaRepository.buscarPorId(admin.getEmpresaId())
+                .orElseThrow(() -> new AutenticacaoInvalidaException("Credenciais inválidas."));
+        return new LoginAdminResponse(jwtTokenService.gerarTokenAdmin(admin, empresa),
+                AdminResponse.from(admin), toEmpresaResponse(empresa));
+    }
+
     /**
      * Cadastro de funcionários (motoristas, manobristas, analistas, curraleiros, pecuaristas)
      * vinculados à empresa, realizado exclusivamente por um administrador autenticado da empresa.
