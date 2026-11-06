@@ -277,11 +277,11 @@ class PostgresIntegrationTest {
 
         empresaAdminService.cadastrarFuncionario(empresaId, new CriarFuncionarioEmpresaRequest(
                 TipoUsuario.motorista, primeiroCpf, "Motorista tenant um", null, primeiroEmail,
-                "11999990001", "senha123", "Motorista", null, null
+                "11999990001", "senha123", "Motorista", null, null, null
         ), adminId);
         empresaAdminService.cadastrarFuncionario(empresaId, new CriarFuncionarioEmpresaRequest(
                 TipoUsuario.motorista, segundoCpf, "Motorista tenant dois", null, segundoEmail,
-                "11999990002", "senha123", "Motorista", null, null
+                "11999990002", "senha123", "Motorista", null, null, null
         ), adminId);
 
         assertThat(jdbcTemplate.queryForObject(
