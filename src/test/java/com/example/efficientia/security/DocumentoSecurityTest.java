@@ -26,6 +26,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -42,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "app.security.enabled=true",
                 "app.security.audience=efficientia-api",
                 "app.security.jwk-set-uri=http://localhost.invalid/jwks",
-                "app.security.allowed-origins=http://localhost:5173"
+                "app.security.allowed-origins=http://localhost:5173,https://efficientia-frontend.onrender.com"
         }
 )
 @Import({SecurityConfig.class, DocumentoExceptionHandler.class, DocumentoSecurityTest.Dependencies.class})
@@ -106,6 +107,27 @@ class DocumentoSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
                         "http://localhost:5173"));
+    }
+
+    @Test
+    void deveAceitarPreflightPutDaOrigemRender() throws Exception {
+        mockMvc.perform(options("/api/v1/documentos")
+                        .header(HttpHeaders.ORIGIN, "https://efficientia-frontend.onrender.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "https://efficientia-frontend.onrender.com"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        containsString("PUT")));
+    }
+
+    @Test
+    void deveRejeitarPreflightDeOrigemNaoConfigurada() throws Exception {
+        mockMvc.perform(options("/api/v1/documentos")
+                        .header(HttpHeaders.ORIGIN, "https://unlisted.example")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "PUT"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test

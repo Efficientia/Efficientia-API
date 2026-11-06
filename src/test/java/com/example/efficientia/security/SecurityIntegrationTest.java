@@ -117,6 +117,15 @@ class SecurityIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
+
+    @Test
+    void signupOperacionalContinuaPublicoParaCadastroDeFuncionarios() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/auth/signup"))
+                .andExpect(result -> {
+                    org.junit.jupiter.api.Assertions.assertNotEquals(401, result.getResponse().getStatus());
+                    org.junit.jupiter.api.Assertions.assertNotEquals(403, result.getResponse().getStatus());
+                });
+    }
     @Test
     void rotasAuthAdmDevemSerPublicas() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/auth/adm/login"))

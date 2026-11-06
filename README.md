@@ -214,7 +214,7 @@ JWT_SECRET=efficientia-secret-key-must-be-at-least-32-bytes-long!
 JWT_ISSUER_URI=efficientia-api
 JWT_AUDIENCE=efficientia-api
 JWT_JWK_SET_URI=
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+CORS_ALLOWED_ORIGINS=https://efficientia-frontend.onrender.com,http://localhost:5173,http://localhost:3000
 # ==============================================================================
 # REDIS (Optional for local development)
 # ==============================================================================
@@ -658,7 +658,7 @@ The following properties can be customized via `.env` or system environment vari
 | `JWT_ISSUER_URI` | `efficientia-api` | Expected issuer URI of inbound JWTs |
 | `JWT_AUDIENCE` | `efficientia-api` | Expected audience identifier |
 | `JWT_JWK_SET_URI` | *(Empty)* | Optional remote JWKS endpoint. Must remain **empty** for internal HS256 symmetric JWT validation |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://localhost:3000` | Comma-separated list of allowed CORS origins |
+| `CORS_ALLOWED_ORIGINS` | `https://efficientia-frontend.onrender.com,http://localhost:5173,http://localhost:3000` | Comma-separated list of allowed CORS origins |
 | `REDIS_URL` | *(Empty)* | Connection URI for Redis instance (`redis://` or `rediss://`) |
 | `REDIS_STREAM_VIAGENS` | `efficientia:events:viagens` | Redis Stream topic name for travel events |
 | `REDIS_LEADERBOARD_KEY`| `efficientia:leaderboard:motoristas` | Redis Sorted Set key for driver rankings |

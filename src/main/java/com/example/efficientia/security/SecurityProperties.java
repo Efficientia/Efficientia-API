@@ -19,7 +19,7 @@ public record SecurityProperties(
         secret = secret == null || secret.isBlank() ? "efficientia-secret-key-must-be-at-least-32-bytes-long!" : secret.strip();
         audience = audience == null || audience.isBlank() ? "efficientia-api" : audience.strip();
         allowedOrigins = allowedOrigins == null || allowedOrigins.isEmpty()
-                ? List.of("http://localhost:5173", "http://localhost:3000")
+                ? List.of("https://efficientia-frontend.onrender.com", "http://localhost:5173", "http://localhost:3000")
                 : allowedOrigins.stream().map(String::strip).filter(value -> !value.isEmpty()).toList();
     }
 }

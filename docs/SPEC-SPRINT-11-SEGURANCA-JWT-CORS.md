@@ -15,8 +15,12 @@ SECURITY_ENABLED=true
 JWT_ISSUER_URI=https://SEU-PROJETO.supabase.co/auth/v1
 JWT_JWK_SET_URI=https://SEU-PROJETO.supabase.co/auth/v1/.well-known/jwks.json
 JWT_AUDIENCE=efficientia-api
-CORS_ALLOWED_ORIGINS=https://app.efficientia.example
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,https://efficientia-frontend.onrender.com
 ```
+
+As origens localhost são exemplos para desenvolvimento; a origem frontend do
+Efficientia está incluída na configuração documentada. Isso não altera as
+variáveis de ambiente já configuradas no Render.
 
 Com `SECURITY_ENABLED=true`, issuer, assinatura, validade e audience são
 validados pelo Resource Server. A API não usa a publishable key ou secret key
@@ -55,7 +59,7 @@ da operação.
 - ausência de token retorna `401 Unauthorized`;
 - papel insuficiente ou escopo incorreto retorna `403 Forbidden`;
 - preflight e respostas CORS usam somente `CORS_ALLOWED_ORIGINS`;
-- métodos aceitos: GET, POST, PATCH, DELETE e OPTIONS;
+- métodos aceitos: GET, POST, PUT, PATCH, DELETE e OPTIONS;
 - conteúdo binário mantém `Cache-Control: private, no-store`;
 - tokens, chaves, conteúdo e caminhos privados não são registrados em log.
 
